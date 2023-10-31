@@ -1,0 +1,6 @@
+spring:
+  data:
+    mongodb:
+      database: graduation-project-document
+      host: localhost
+      port: 27017
