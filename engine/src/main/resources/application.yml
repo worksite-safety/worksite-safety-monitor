@@ -4,3 +4,6 @@ spring:
       database: graduation-project-document
       host: localhost
       port: 27017
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
