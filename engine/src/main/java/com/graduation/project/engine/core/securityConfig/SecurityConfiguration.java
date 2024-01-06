@@ -32,7 +32,8 @@ public class SecurityConfiguration {
             "/auth/change-password/**",
             "/docs/**",
             "/demo/aziz",
-            "/raw-event**"
+            "/raw-event**",
+            "/mail/**"
     };
     private static final String[] ADMIN_URLS = {
             "/auth/role/**",

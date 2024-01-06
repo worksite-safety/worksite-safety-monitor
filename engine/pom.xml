@@ -33,6 +33,15 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>javax.mail</groupId>
+            <artifactId>javax.mail-api</artifactId>
+            <version>1.6.2</version> <!-- Use the latest version available -->
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
@@ -83,6 +92,7 @@
             <version>${gson.version}</version>
         </dependency>
         <dependency>
+
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
             <version>${spring-kafka.version}</version>
@@ -92,6 +102,12 @@
             <artifactId>spring-kafka-test</artifactId>
             <version>${spring-kafka.version}</version>
             <scope>test</scope>
+        </dependency>
+
+
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context-support</artifactId>
+            <version>6.1.2</version>
         </dependency>
 
     </dependencies>
