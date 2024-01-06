@@ -1,5 +1,7 @@
 package com.graduation.project.engine.user.controller;
 
+import com.graduation.project.engine.user.model.request.ChangePasswordRequestDto;
+import com.graduation.project.engine.user.model.request.ForgotPasswordRequestDto;
 import com.graduation.project.engine.user.model.request.LoginRequestDto;
 import com.graduation.project.engine.user.model.request.RegisterRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
@@ -25,5 +27,20 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponseDto> login(@RequestBody LoginRequestDto request) {
         return ResponseEntity.ok(userService.authenticate(request));
+    }
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
+
+        userService.forgotPassword(request.getEmail());
+        return ResponseEntity.ok("Successfuly mail sended !!");
+
+    }
+    @PostMapping("/change-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody ChangePasswordRequestDto request) {
+
+
+        userService.changePassword(request);
+        return ResponseEntity.ok("Successfuly mail sended !!");
+
     }
 }
