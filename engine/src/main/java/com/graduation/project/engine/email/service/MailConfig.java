@@ -10,16 +10,16 @@ import org.springframework.mail.javamail.JavaMailSenderImpl;
 @Configuration
 public class MailConfig {
 
-  @Value("${kafka.mail.host}")
+  @Value("${spring.mail.host}")
   private String mailHost;
 
-  @Value("${kafka.mail.port}")
+  @Value("${spring.mail.port}")
   private int mailPort;
 
-  @Value("${kafka.mail.username}")
+  @Value("${spring.mail.username}")
   private String mailUsername;
 
-  @Value("${kafka.mail.password}")
+  @Value("${spring.mail.password}")
   private String mailPassword;
 
   @Bean
