@@ -8,7 +8,8 @@ import {
     Error, ProtectedRoute, SharedLayout, Register, UserSharedLayout, Profile, Stats
 } from "./pages"
 import {useSelector} from "react-redux";
-
+import StatsAziz from "./pages/StatsAziz"
+import {ChartsContainer} from "./components";
 
 function App() {
 
@@ -29,14 +30,16 @@ function App() {
               }
           >
               <Route index element={<Stats/>}/>
-              <Route path='statistics' element={<Stats/>}/>
+              <Route path='statistics' element={<ChartsContainer/>}/>
               <Route path='profile' element={<Profile/>}/>
+
 
 
           </Route>}
           <Route path='/' element={<Landing/>}/>
           <Route path='landing' element={<Landing/>}/>
           <Route path='register' element={<Register/>}/>
+
           <Route path='*' element={<Error/>}/>
           {user && user.role === 'ADMIN' && <Route
               path='/'

@@ -1,8 +1,8 @@
 package com.graduation.project.engine;
 
-import com.graduation.project.engine.dto.converter.UserResponseDto2UserConverter;
-import com.graduation.project.engine.dto.request.RegisterRequestDto;
-import com.graduation.project.engine.service.UserService;
+import com.graduation.project.engine.user.model.converter.UserResponseDto2UserConverter;
+import com.graduation.project.engine.user.model.request.RegisterRequestDto;
+import com.graduation.project.engine.user.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;

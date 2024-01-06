@@ -16,7 +16,10 @@ const BarChartComponent = ({ data }) => {
                 <XAxis dataKey='date' />
                 <YAxis type='number' allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey='totalIncome' fill='#3b82f6' barSize={75} />
+                <Bar dataKey='fall' fill='#B799FF' barSize={75} />
+                <Bar dataKey='armsUp' fill='#ACBCFF' barSize={75} />
+                <Bar dataKey='frontBending' fill='#AEE2FF' barSize={75} />
+
             </BarChart>
         </ResponsiveContainer>
     );

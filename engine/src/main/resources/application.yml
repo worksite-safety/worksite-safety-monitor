@@ -7,3 +7,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  kafka:
+    bootstrap-servers: localhost:9092
+kafka:
+  raw-event:
+    topic: rawEvents
