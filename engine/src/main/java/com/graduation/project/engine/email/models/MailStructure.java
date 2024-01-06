@@ -1,4 +1,4 @@
-package com.graduation.project.engine.models;
+package com.graduation.project.engine.email.models;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -10,7 +10,4 @@ public class MailStructure {
     private String subject;
     private String message;
 
-    public String getMessage() {
-        return this.message;
-    }
 }
