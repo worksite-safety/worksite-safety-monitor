@@ -8,6 +8,11 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
+  kafka:
+    bootstrap-servers: localhost:9092
+kafka:
+  raw-event:
+    topic: rawEvents
   mail:
     host: smtp.gmail.com
     port: 587
@@ -20,9 +25,3 @@ spring:
         smtp:
           starttls:
             enable: true
-
-
-
-
-
-

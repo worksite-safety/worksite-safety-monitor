@@ -1,7 +1,7 @@
 package com.graduation.project.engine.core.securityConfig;
 
 import com.graduation.project.engine.core.exception.CustomAuthenticationEntryPoint;
-import com.graduation.project.engine.models.Role;
+import com.graduation.project.engine.user.model.Role;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +26,7 @@ public class SecurityConfiguration {
     private final LogoutHandler logoutHandler;
     private static final String[] PUBLIC_URLS = {
             "/auth/login",
+            "/event/countable-events/**",
             "/auth/register",
             "/auth/forgot-password",
             "/auth/change-password/**",

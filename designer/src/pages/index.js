@@ -9,6 +9,7 @@ import Profile from "./Profile";
 import Stats from "./Stats";
 import UserSharedLayout from "./UserSharedLayout";
 import UserProtectedRoute from "./UserProtectedRoute";
+import StatsAziz from "./StatsAziz";
 
 export {
     Landing,
@@ -21,5 +22,6 @@ export {
     Profile,
     Stats,
     UserSharedLayout,
-    UserProtectedRoute
+    UserProtectedRoute,
+    StatsAziz
 }
