@@ -1,9 +1,13 @@
 package com.graduation.project.engine.user.service;
 
+import com.graduation.project.engine.core.PasswordService;
+import com.graduation.project.engine.core.exception.BadRequestException;
 import com.graduation.project.engine.core.exception.EntityAlreadyExistsException;
 import com.graduation.project.engine.core.exception.EntityNotFoundException;
 import com.graduation.project.engine.core.securityConfig.JwtService;
+import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.user.model.converter.User2UserResponseDtoConverter;
+import com.graduation.project.engine.user.model.request.ChangePasswordRequestDto;
 import com.graduation.project.engine.user.model.request.LoginRequestDto;
 import com.graduation.project.engine.user.model.request.RegisterRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
@@ -14,7 +18,9 @@ import com.graduation.project.engine.user.model.TokenType;
 import com.graduation.project.engine.user.model.User;
 import com.graduation.project.engine.user.repository.TokenRepository;
 import com.graduation.project.engine.user.repository.UserRepository;
+import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,89 +34,124 @@ import static com.graduation.project.engine.core.exception.constant.ErrorConstan
 @Service
 @RequiredArgsConstructor
 public class UserService {
-    private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
-    private final AuthenticationManager authenticationManager;
-    private final TokenRepository tokenRepository;
-    private final User2UserResponseDtoConverter user2UserResponseDtoConverter;
-    public AuthenticationResponseDto register(RegisterRequestDto request) {
 
-        userRepository.findByEmail(request.getEmail()).ifPresent(s -> {
-            throw new EntityAlreadyExistsException(errorMessageParser(USER_EMAIL_ALREADY_EXISTS, request.getEmail()));
-        });
+  private final UserRepository userRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final JwtService jwtService;
+  private final AuthenticationManager authenticationManager;
+  private final TokenRepository tokenRepository;
+  private final User2UserResponseDtoConverter user2UserResponseDtoConverter;
+  private final PasswordService passwordService;
+  private final MailService mailService;
 
+  public AuthenticationResponseDto register(RegisterRequestDto request) {
 
-        var user = User.builder()
-                .firstName(request.getFirstName())
-                .lastName(request.getLastName())
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .role(Role.ADMIN)
-                .registeredAt(LocalDateTime.now())
-                .build();
-        var savedUser = userRepository.save(user);
-        var jwtToken = jwtService.generateToken(user);
-        saveUserToken(savedUser, jwtToken);
-        return AuthenticationResponseDto.builder()
-                .id(user.getId())
-                .token(jwtToken)
-                .name(user.getFirstName())
-                .role(user.getRole())
-                .lastName(user.getLastName())
-                .email(user.getEmail())
-                .build();
+    userRepository.findByEmail(request.getEmail()).ifPresent(s -> {
+      throw new EntityAlreadyExistsException(
+          errorMessageParser(USER_EMAIL_ALREADY_EXISTS, request.getEmail()));
+    });
+
+    var user = User.builder()
+        .firstName(request.getFirstName())
+        .lastName(request.getLastName())
+        .email(request.getEmail())
+        .password(passwordEncoder.encode(request.getPassword()))
+        .role(Role.ADMIN)
+        .registeredAt(LocalDateTime.now())
+        .build();
+    var savedUser = userRepository.save(user);
+    var jwtToken = jwtService.generateToken(user);
+    saveUserToken(savedUser, jwtToken);
+    return AuthenticationResponseDto.builder()
+        .id(user.getId())
+        .token(jwtToken)
+        .name(user.getFirstName())
+        .role(user.getRole())
+        .lastName(user.getLastName())
+        .email(user.getEmail())
+        .build();
+  }
+
+  public AuthenticationResponseDto authenticate(LoginRequestDto request) {
+
+    authenticationManager.authenticate(
+        new UsernamePasswordAuthenticationToken(
+            request.getEmail(),
+            request.getPassword()
+        )
+    );
+    var user = userRepository.findByEmail(request.getEmail()).orElseThrow();
+
+    var jwtToken = jwtService.generateToken(user);
+
+    revokeAllUserTokens(user);
+    saveUserToken(user, jwtToken);
+
+    return AuthenticationResponseDto.builder()
+        .id(user.getId())
+        .token(jwtToken)
+        .name(user.getFirstName())
+        .role(user.getRole())
+        .lastName(user.getLastName())
+        .email(user.getEmail())
+        .build();
+  }
+
+  public List<UserResponseDto> getAllUsers() {
+    return user2UserResponseDtoConverter.convert(userRepository.findAll());
+  }
+
+  public UserResponseDto getUserById(String id) {
+    return user2UserResponseDtoConverter.convert(userRepository.findById(id).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, id))));
+  }
+
+  private void saveUserToken(User user, String jwtToken) {
+    var token = Token.builder()
+        .user(user)
+        .token(jwtToken)
+        .tokenType(TokenType.BEARER)
+        .expired(false)
+        .revoked(false)
+        .build();
+    tokenRepository.save(token);
+  }
+
+  private void revokeAllUserTokens(User user) {
+    var validUserTokens = tokenRepository.findByUserIdAndExpiredFalseAndRevokedFalse(user.getId());
+    if (validUserTokens.isEmpty()) {
+      return;
     }
+    validUserTokens.forEach(token -> {
+      token.setExpired(true);
+      token.setRevoked(true);
+    });
+    tokenRepository.saveAll(validUserTokens);
+  }
 
-    public AuthenticationResponseDto authenticate(LoginRequestDto request) {
+  @SneakyThrows
+  public void forgotPassword(String email) {
 
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
-        var user = userRepository.findByEmail(request.getEmail()).orElseThrow();
+    User user = userRepository.findByEmail(email).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, email)));
 
-        var jwtToken = jwtService.generateToken(user);
+    String hashedEmail = passwordService.encrypt(email);
 
-        revokeAllUserTokens(user);
-        saveUserToken(user, jwtToken);
+    mailService.sendForgotPasswordEmail(user, hashedEmail);
+  }
 
-        return AuthenticationResponseDto.builder()
-                .id(user.getId())
-                .token(jwtToken)
-                .name(user.getFirstName())
-                .role(user.getRole())
-                .lastName(user.getLastName())
-                .email(user.getEmail())
-                .build();
+  @SneakyThrows
+  public void changePassword(ChangePasswordRequestDto request) {
+
+    String email = passwordService.decrypt(request.getSecretKey());
+    if (!request.getPassword().equals(request.getConfirmPassword())) {
+      throw new BadRequestException(errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getPassword()));
     }
-    public List<UserResponseDto> getAllUsers() {
-        return user2UserResponseDtoConverter.convert(userRepository.findAll());
-    }
+    User user = userRepository.findByEmail(email).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, email)));
 
-    public UserResponseDto getUserById(String id) {
-        return user2UserResponseDtoConverter.convert(userRepository.findById(id).orElseThrow(() -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, id))));
-    }
-    private void saveUserToken(User user, String jwtToken) {
-        var token = Token.builder()
-                .user(user)
-                .token(jwtToken)
-                .tokenType(TokenType.BEARER)
-                .expired(false)
-                .revoked(false)
-                .build();
-        tokenRepository.save(token);
-    }
-    private void revokeAllUserTokens(User user) {
-        var validUserTokens = tokenRepository.findByUserIdAndExpiredFalseAndRevokedFalse(user.getId());
-        if (validUserTokens.isEmpty())
-            return;
-        validUserTokens.forEach(token -> {
-            token.setExpired(true);
-            token.setRevoked(true);
-        });
-        tokenRepository.saveAll(validUserTokens);
-    }
+
+    user.setPassword(passwordService.hashPassword(request.getPassword()));
+    userRepository.save(user);
+  }
 }
