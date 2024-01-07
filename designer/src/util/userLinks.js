@@ -1,5 +1,5 @@
 import {MdPayment, MdQueryStats} from 'react-icons/md';
-import { ImProfile } from 'react-icons/im';
+import {ImCamera, ImProfile} from 'react-icons/im';
 
 const links = [
 
@@ -20,6 +20,12 @@ const links = [
         text: 'profile',
         path: 'profile',
         icon: <ImProfile />,
+    },
+    {
+        id: 4,
+        text: 'video',
+        path: 'video',
+        icon: <ImCamera  />,
     },
 ];
 

@@ -5,6 +5,7 @@ import ForgotPassword from "./ForgotPassword";
 import ChangePassword from "./ChangePassword";
 import Profile from "./Profile";
 import Stats from "./Stats";
+import Video from "./Video";
 import UserSharedLayout from "./UserSharedLayout";
 import UserProtectedRoute from "./UserProtectedRoute";
 import StatsAziz from "./StatsAziz";
@@ -17,6 +18,7 @@ export {
     ChangePassword,
     Profile,
     Stats,
+    Video,
     UserSharedLayout,
     UserProtectedRoute,
     StatsAziz

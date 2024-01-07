@@ -1,0 +1,12 @@
+.video-stream-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 60vh;
+}
+
+.error-message {
+    color: red;
+    font-size: 31px;
+    font-weight: bold;
+}

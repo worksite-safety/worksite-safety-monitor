@@ -11,16 +11,19 @@ import {
     Register,
     UserSharedLayout,
     Profile,
+    Video,
     Stats,
     ChangePassword,
     ForgotPassword,
     UserProtectedRoute
+
 } from "./pages"
 import {useSelector} from "react-redux";
 import StatsAziz from "./pages/StatsAziz"
 import {ChartsContainer} from "./components";
 
 function App() {
+
 
 
     const {user} = useSelector((store) => store.user);
@@ -40,6 +43,7 @@ function App() {
                 >
                     <Route index element={<ChartsContainer/>}/>
                     <Route path='statistics' element={<ChartsContainer/>}/>
+                    <Route path='video' element={<Video/>}/>
                     <Route path='profile' element={<Profile/>}/>
 
 
@@ -55,6 +59,7 @@ function App() {
         </BrowserRouter>
     )
         ;
+
 }
 
 export default App;
