@@ -7,6 +7,7 @@ import ProtectedRoute from "./ProtectedRoute";
 import SharedLayout from "./SharedLayout";
 import Profile from "./Profile";
 import Stats from "./Stats";
+import Video from "./Video";
 import UserSharedLayout from "./UserSharedLayout";
 import UserProtectedRoute from "./UserProtectedRoute";
 
@@ -20,6 +21,7 @@ export {
     SharedLayout,
     Profile,
     Stats,
+    Video,
     UserSharedLayout,
     UserProtectedRoute
 }

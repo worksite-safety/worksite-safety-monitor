@@ -5,7 +5,7 @@ import 'react-toastify/dist/ReactToastify.css'
 import {ToastContainer} from "react-toastify";
 import {
     Landing,
-    Error, ProtectedRoute, SharedLayout, Register, UserSharedLayout, Profile, Stats
+    Error, ProtectedRoute, SharedLayout, Register, UserSharedLayout, Profile, Stats, Video
 } from "./pages"
 import {useSelector} from "react-redux";
 
@@ -30,6 +30,7 @@ function App() {
           >
               <Route index element={<Stats/>}/>
               <Route path='statistics' element={<Stats/>}/>
+              <Route path='video' element={<Video/>}/>
               <Route path='profile' element={<Profile/>}/>
 
 
