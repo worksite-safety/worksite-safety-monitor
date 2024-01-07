@@ -1,6 +1,6 @@
 package com.graduation.project.engine.core.securityConfig;
 
-import com.graduation.project.engine.repository.UserRepository;
+import com.graduation.project.engine.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

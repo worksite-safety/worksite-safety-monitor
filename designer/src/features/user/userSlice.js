@@ -7,6 +7,7 @@ import {
     updateUserProfilePictureThunk,
     updateUserThunk,
 } from './userThunk';
+import {useNavigate} from "react-router-dom";
 
 
 const initialState = {
@@ -14,6 +15,7 @@ const initialState = {
     isSidebarOpen: false,
     user: getUserFromLocalStorage(),
 };
+
 export const clearStore = createAsyncThunk('user/clearStore', clearStoreThunk);
 export const registerUser = createAsyncThunk(
     'user/registerUser',
@@ -46,14 +48,20 @@ export const loginUser = createAsyncThunk(
 export const forgotPassword = createAsyncThunk(
     'user/forgot-password',
     async (email, thunkAPI) => {
+
         try {
             const resp = await customFetch.post('/auth/forgot-password ', email);
             toast.success("Password Change Mail Sent...")
+
             return resp.data;
         } catch (error) {
             if (error.response.status === 403) {
 
-                toast.error("User Does Not Exists!!!")
+                toast.error("Server Side Problem Occured!!")
+            }
+            if (error.response.status === 404) {
+
+                toast.error("Email Related Problem Occured!!")
             }
             return thunkAPI.rejectWithValue(error.response.data.msg);
         }
@@ -61,20 +69,23 @@ export const forgotPassword = createAsyncThunk(
 
 export const changePassword = createAsyncThunk(
     'user/change-password',
-    async (password, thunkAPI) => {
-        console.log(password.email)
-
+    async ({ password, confirmPassword, secretKey }, thunkAPI) => {
         try {
-            const resp = await customFetch.put(`/auth/change-password/${password.email} `, password);
-            toast.success("Password Changed Successfully...")
+            const resp = await customFetch.post(`/auth/change-password`, {
+                password,
+                confirmPassword,
+                secretKey
+            });
+            toast.success('Password Changed Successfully...');
             return resp.data;
         } catch (error) {
-            console.log(error)
-            toast.error("Something Went Wrong!!!")
-
+            console.error(error);
+            toast.error('Something Went Wrong!!!');
             return thunkAPI.rejectWithValue(error.response.data.msg);
         }
-    });
+    }
+);
+
 
 
 export const updateUser = createAsyncThunk(
@@ -105,17 +116,7 @@ export const updateUserProfilePicture = createAsyncThunk(
 );
 
 
-export const getAllJobsThunk = async (_, thunkAPI) => {
 
-
-    let url = `/auth/getAllUsers`;
-    try {
-        const resp = await customFetch.get(url);
-        return resp.data;
-    } catch (error) {
-        return thunkAPI.rejectWithValue(error.response.data.msg);
-    }
-};
 
 const userSlice = createSlice({
     name: 'user',
