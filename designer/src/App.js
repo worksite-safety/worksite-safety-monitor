@@ -5,7 +5,16 @@ import 'react-toastify/dist/ReactToastify.css'
 import {ToastContainer} from "react-toastify";
 import {
     Landing,
-    Error, ProtectedRoute, SharedLayout, Register, UserSharedLayout, Profile, Stats, ChangePassword, ForgotPassword
+    Error,
+    ProtectedRoute,
+    SharedLayout,
+    Register,
+    UserSharedLayout,
+    Profile,
+    Stats,
+    ChangePassword,
+    ForgotPassword,
+    UserProtectedRoute
 } from "./pages"
 import {useSelector} from "react-redux";
 import StatsAziz from "./pages/StatsAziz"
@@ -21,15 +30,15 @@ function App() {
 
             <Routes>
 
-                {user && user.role === 'USER' && <Route
+                {user && user.role === 'ADMIN' && <Route
                     path='/'
                     element={
-                        <ProtectedRoute>
+                        <UserProtectedRoute>
                             <UserSharedLayout/>
-                        </ProtectedRoute>
+                        </UserProtectedRoute>
                     }
                 >
-                    <Route index element={<Stats/>}/>
+                    <Route index element={<ChartsContainer/>}/>
                     <Route path='statistics' element={<ChartsContainer/>}/>
                     <Route path='profile' element={<Profile/>}/>
 
@@ -41,16 +50,6 @@ function App() {
                 <Route path='forgot-password' element={<ForgotPassword/>}/>
                 <Route path='change-password' element={<ChangePassword/>}/>
                 <Route path='*' element={<Error/>}/>
-                {user && user.role === 'ADMIN' && <Route
-                    path='/'
-                    element={
-                        <ProtectedRoute>
-                            <SharedLayout/>
-                        </ProtectedRoute>
-                    }
-                >
-                    <Route index element={<Profile/>}/>
-                </Route>}
             </Routes>
             <ToastContainer position='top-center'/>
         </BrowserRouter>

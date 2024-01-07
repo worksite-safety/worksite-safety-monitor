@@ -4,16 +4,21 @@ import {useDispatch, useSelector} from "react-redux";
 import {Logo} from "./index";
 import {logoutUser, toggleSidebar} from "../features/user/userSlice";
 import {useState} from "react";
+import {useNavigate} from "react-router-dom";
 
 const Navbar = () => {
     const [showLogout, setShowLogout] = useState(false)
     const {user} = useSelector((store) => store.user)
     const dispatch = useDispatch();
 
+    const navigate = useNavigate();
     const toggle = () => {
         dispatch(toggleSidebar());
     };
-
+    const handleLogout = () => {
+        dispatch(logoutUser());
+        navigate('/');
+    };
     return (
         <Wrapper>
             <div className={'nav-center'}>
@@ -34,9 +39,7 @@ const Navbar = () => {
                         <FaCaretDown/>
                     </button>
                     <div className={showLogout ? 'dropdown show-dropdown' : 'dropdown'}>
-                        <button
-                            onClick={() => {dispatch(logoutUser());}}
-                            className='dropdown-btn'>
+                        <button onClick={handleLogout} className='dropdown-btn'>
                             logout
                         </button>
                     </div>
