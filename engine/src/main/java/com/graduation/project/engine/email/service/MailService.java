@@ -78,7 +78,7 @@ public class MailService {
 
     mimeMessageHelper.setSubject(subject);
 
-    String resetPasswordLink = "http://localhost:3000/resetpassword?token=" + hashedEmailUrl;
+    String resetPasswordLink = "http://localhost:3000/change-password?token=" + hashedEmailUrl;
 
     // Create an HTML message using a beautiful template
     String htmlContent = "<html>"

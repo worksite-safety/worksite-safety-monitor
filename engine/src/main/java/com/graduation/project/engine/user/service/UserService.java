@@ -144,14 +144,14 @@ public class UserService {
   public void changePassword(ChangePasswordRequestDto request) {
 
     String email = passwordService.decrypt(request.getSecretKey());
-    if (!request.getChangePassword().equals(request.getConfirmPassword())) {
-      throw new BadRequestException(errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getChangePassword()));
+    if (!request.getPassword().equals(request.getConfirmPassword())) {
+      throw new BadRequestException(errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getPassword()));
     }
     User user = userRepository.findByEmail(email).orElseThrow(
         () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, email)));
 
 
-    user.setPassword(passwordService.hashPassword(request.getChangePassword()));
+    user.setPassword(passwordService.hashPassword(request.getPassword()));
     userRepository.save(user);
   }
 }
