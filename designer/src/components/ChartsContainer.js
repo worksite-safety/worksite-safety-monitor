@@ -23,7 +23,13 @@ const ChartsContainer = () => {
   };
 
   useEffect(() => {
-    fetchData(1640466000000, 1704548630000); // Fetch initial data
+    const today = new Date();
+    const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    oneWeekAgo.setHours(0, 0, 1);
+    today.setHours(23, 59, 59);
+
+    fetchData(oneWeekAgo.getTime(), today.getTime());
   }, []);
 
   return (
