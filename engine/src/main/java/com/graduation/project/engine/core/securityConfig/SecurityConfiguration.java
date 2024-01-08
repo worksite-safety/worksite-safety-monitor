@@ -29,6 +29,9 @@ public class SecurityConfiguration {
       "/auth/change-password",
       "/auth/login",
       "/event/countable-events/**",
+      "/auth/update-user/**",
+      "/event/all-events",
+
       "/auth/register",
       "/docs/**",
       "/mail/**",

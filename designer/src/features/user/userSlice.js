@@ -7,7 +7,6 @@ import {
     updateUserProfilePictureThunk,
     updateUserThunk,
 } from './userThunk';
-import {useNavigate} from "react-router-dom";
 
 
 const initialState = {
@@ -91,7 +90,7 @@ export const changePassword = createAsyncThunk(
 export const updateUser = createAsyncThunk(
     'user/updateUser',
     async (user, thunkAPI) => {
-        return updateUserThunk('/auth/edit', user, thunkAPI);
+        return updateUserThunk('/auth/update-user', user, thunkAPI);
     }
 );
 export const updateUserProfilePicture = createAsyncThunk(

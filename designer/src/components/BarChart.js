@@ -19,7 +19,6 @@ const BarChartComponent = ({ data }) => {
                 <Bar dataKey='fall' fill='#B799FF' barSize={75} />
                 <Bar dataKey='armsUp' fill='#ACBCFF' barSize={75} />
                 <Bar dataKey='frontBending' fill='#AEE2FF' barSize={75} />
-
             </BarChart>
         </ResponsiveContainer>
     );

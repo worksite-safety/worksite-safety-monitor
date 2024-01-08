@@ -1,14 +1,29 @@
 import React, {useEffect, useState} from 'react';
 import BarChart from './BarChart';
-import AreaChart from './AreaChart';
+import LineChart from './LineChartComponent';
 import Wrapper from '../assets/wrappers/ChartsContainer';
 import DateRangePickerComp from "./DatePickerComp";
+import AreaChart from './AreaChart';
 
 const ChartsContainer = () => {
   const [barChart, setBarChart] = useState(true);
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const [chartType, setChartType] = useState('area');
+  const renderChart = () => {
+    switch (chartType) {
+      case 'line':
+        return <LineChart data={data} />;
+      case 'bar':
+        return <BarChart data={data} />;
+      case 'area':
+        return <AreaChart data={data} />;
+      case 'pie':
+        //return <PieChart data={data} />;
+      default:
+        return <BarChart data={data} />;
+    }
+  };
   const fetchData = async (startDate, endDate) => {
     setLoading(true);
     try {
@@ -34,17 +49,28 @@ const ChartsContainer = () => {
 
   return (
       <Wrapper>
-        <h4>Total Violence History By Days</h4>
-        <button type='button' onClick={() => setBarChart(!barChart)}>
-          {barChart ? 'Area Chart' : 'Bar Chart'}
-        </button>
-        <DateRangePickerComp onApply={fetchData} />
+        <h4>Total Countable Events History By Days</h4>
+        <div>
+          <button type='button' onClick={() => setChartType('bar')}>
+            Bar Chart
+          </button>
+          <button type='button' onClick={() => setChartType('line')}>
+            Line Chart
+          </button>
+          <button type='button' onClick={() => setChartType('area')}>
+            Area Chart
+          </button>
+          <button type='button' onClick={() => setChartType('pie')}>
+            Pie Chart
+          </button>
+        </div>
+        <DateRangePickerComp onApply={fetchData}/>
         {loading ? (
             <p>Loading...</p>
         ) : data.length === 0 ? (
             <h1>No data available</h1>
         ) : (
-            barChart ? <BarChart data={data} /> : <AreaChart data={data} />
+            renderChart()
         )}
       </Wrapper>
   );

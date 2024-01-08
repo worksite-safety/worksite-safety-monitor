@@ -4,7 +4,9 @@ import com.graduation.project.engine.user.model.request.ChangePasswordRequestDto
 import com.graduation.project.engine.user.model.request.ForgotPasswordRequestDto;
 import com.graduation.project.engine.user.model.request.LoginRequestDto;
 import com.graduation.project.engine.user.model.request.RegisterRequestDto;
+import com.graduation.project.engine.user.model.request.UserUpdateRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
+import com.graduation.project.engine.user.model.response.UserResponseDto;
 import com.graduation.project.engine.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,11 +38,15 @@ public class UserController {
 
     }
     @PostMapping("/change-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody ChangePasswordRequestDto request) {
+    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequestDto request) {
 
 
         userService.changePassword(request);
         return ResponseEntity.ok("Successfuly mail sended !!");
 
+    }
+    @PutMapping("/update-user/{userId}")
+    public ResponseEntity<AuthenticationResponseDto> update(@RequestBody UserUpdateRequestDto request, @PathVariable("userId") String userId) {
+        return ResponseEntity.ok(userService.updateUser(request, userId));
     }
 }

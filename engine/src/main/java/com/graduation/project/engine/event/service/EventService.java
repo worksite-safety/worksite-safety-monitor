@@ -10,6 +10,8 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +26,7 @@ public class EventService {
   private final EventRepository eventRepository;
 
   public List<Event> getAllEvents() {
-
     return eventRepository.findAll();
-
   }
 
   public List<Event> getAllByEventTypes(List<String> eventTypes, Long startDate, Long endDate) {
@@ -55,6 +55,8 @@ public class EventService {
           .frontBending(eventCounts.getOrDefault("front-bend", 0L).intValue())
           .build());
     });
+    countableEventsList.sort(Comparator.comparing(
+        event -> LocalDate.parse(event.getDate(), DateTimeFormatter.ofPattern("dd.MM.yyyy"))));
 
     return countableEventsList;
   }

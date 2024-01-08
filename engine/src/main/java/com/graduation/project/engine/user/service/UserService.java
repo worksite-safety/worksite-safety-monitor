@@ -10,6 +10,7 @@ import com.graduation.project.engine.user.model.converter.User2UserResponseDtoCo
 import com.graduation.project.engine.user.model.request.ChangePasswordRequestDto;
 import com.graduation.project.engine.user.model.request.LoginRequestDto;
 import com.graduation.project.engine.user.model.request.RegisterRequestDto;
+import com.graduation.project.engine.user.model.request.UserUpdateRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
 import com.graduation.project.engine.user.model.response.UserResponseDto;
 import com.graduation.project.engine.user.model.Role;
@@ -18,7 +19,6 @@ import com.graduation.project.engine.user.model.TokenType;
 import com.graduation.project.engine.user.model.User;
 import com.graduation.project.engine.user.repository.TokenRepository;
 import com.graduation.project.engine.user.repository.UserRepository;
-import jakarta.mail.MessagingException;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -144,14 +144,40 @@ public class UserService {
   public void changePassword(ChangePasswordRequestDto request) {
 
     String email = passwordService.decrypt(request.getSecretKey());
-    if (!request.getPassword().equals(request.getConfirmPassword())) {
-      throw new BadRequestException(errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getPassword()));
-    }
+
     User user = userRepository.findByEmail(email).orElseThrow(
         () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, email)));
 
+    if (!request.getPassword().equals(request.getConfirmPassword())) {
+      throw new BadRequestException(
+          errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getPassword()));
+    }
 
     user.setPassword(passwordService.hashPassword(request.getPassword()));
     userRepository.save(user);
+  }
+
+  public AuthenticationResponseDto updateUser(UserUpdateRequestDto request, String userId) {
+
+    User user = userRepository.findById(userId).orElseThrow(
+        () -> new EntityNotFoundException(
+            errorMessageParser(USER_NOT_FOUND_MESSAGE, userId)));
+
+    if (!request.getNewPassword().equals(request.getNewPasswordConfirm())) {
+      throw new BadRequestException(
+          errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getNewPassword()));
+    }
+
+    user.setPassword(passwordService.hashPassword(request.getNewPassword()));
+
+    userRepository.save(user);
+
+    return AuthenticationResponseDto.builder()
+        .id(user.getId())
+        .name(user.getFirstName())
+        .role(user.getRole())
+        .lastName(user.getLastName())
+        .email(user.getEmail())
+        .build();
   }
 }

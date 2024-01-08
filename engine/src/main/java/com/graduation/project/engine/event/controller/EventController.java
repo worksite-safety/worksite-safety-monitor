@@ -1,5 +1,6 @@
 package com.graduation.project.engine.event.controller;
 
+import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.service.EventService;
 import java.util.List;
@@ -26,5 +27,8 @@ public class EventController {
     return eventService.getAllCountableEventsByDateIntervals(startDate, endDate);
   }
 
-
+  @GetMapping("/all-events")
+  public List<Event> getAllEvents() {
+    return eventService.getAllEvents();
+  }
 }
