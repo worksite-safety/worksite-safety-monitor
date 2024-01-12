@@ -45,32 +45,32 @@ const ChartsContainer = () => {
 
   const keysAndColorsPeriodicEventsAreaChart = [
     { key: 'noHelmet', stroke: '#92C7CF', fill: '#B799FF', strokeDasharray: '5 5' },
-    { key: 'noJacket', stroke: '#AAD7D9', fill: '#ACBCFF', strokeDasharray: '5 5' },
+    { key: 'noJacket', stroke: '#86B6F6', fill: '#AEE2FF', strokeDasharray: '5 5' },
   ];
   const renderCountableEventsChart = () => {
     switch (countableEventsChartType) {
       case 'line':
-        return <LineChart data={data} keysAndColors={keysAndColorsCountableEventsLineChart} />;
+        return <LineChart data={data} keysAndColors={keysAndColorsCountableEventsLineChart} yAxisTitle="Total Count Of Events" />;
       case 'bar':
-        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Count Of Events" />;
+        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Total Count Of Events" />;
       case 'area':
-        return <AreaChart data={data} keysAndColors={keysAndColorsCountableAreaChart} />;
+        return <AreaChart data={data} keysAndColors={keysAndColorsCountableAreaChart} yAxisTitle="Total Count Of Events"/>;
       case 'pie':
         //return <PieChart data={data} />;
         // eslint-disable-next-line no-fallthrough
       default:
-        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Count Of Events" />;
+        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Total Count Of Events" />;
     }
   };
 
   const renderPeriodicEventsChart = () => {
     switch (periodicEventsChartType) {
       case 'line':
-        return <LineChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsLineChart} />;
+        return <LineChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsLineChart} yAxisTitle="Duration Of Violations (Minutes)" />;
       case 'bar':
         return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Minutes)" />;
       case 'area':
-        return <AreaChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsAreaChart} />;
+        return <AreaChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsAreaChart} yAxisTitle="Duration Of Violations (Minutes)"/>;
       case 'pie':
         //return <PieChart data={periodicEventsData} />;
         // eslint-disable-next-line no-fallthrough
@@ -150,7 +150,7 @@ const ChartsContainer = () => {
 
         </div>
 
-        <h4>Duration of Periodic Events History By Days</h4>
+        <h4>Total Duration of Periodic Events History By Days</h4>
         <div>
           <button type='button'
                   onClick={() => setPeriodicEventsChartType('bar')}>
