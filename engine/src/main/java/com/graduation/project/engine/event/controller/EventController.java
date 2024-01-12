@@ -2,6 +2,7 @@ package com.graduation.project.engine.event.controller;
 
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.CountableEvents;
+import com.graduation.project.engine.event.model.response.PeriodicEvents;
 import com.graduation.project.engine.event.service.EventService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,12 @@ public class EventController {
       @PathVariable("endDate") Long endDate) {
 
     return eventService.getAllCountableEventsByDateIntervals(startDate, endDate);
+  }
+  @GetMapping("/periodic-events/{startDate}/{endDate}")
+  public List<PeriodicEvents> getAllPeriodicEvents(@PathVariable("startDate") Long startDate,
+      @PathVariable("endDate") Long endDate) {
+
+    return eventService.getAllPeriodicEventsByDateIntervals(startDate, endDate);
   }
 
   @GetMapping("/all-events")

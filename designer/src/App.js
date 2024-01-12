@@ -6,20 +6,16 @@ import {ToastContainer} from "react-toastify";
 import {
     Landing,
     Error,
-    ProtectedRoute,
-    SharedLayout,
     Register,
     UserSharedLayout,
     Profile,
     Video,
-    Stats,
     ChangePassword,
     ForgotPassword,
     UserProtectedRoute
 
 } from "./pages"
 import {useSelector} from "react-redux";
-import StatsAziz from "./pages/StatsAziz"
 import {ChartsContainer} from "./components";
 
 function App() {

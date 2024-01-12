@@ -6,7 +6,6 @@ import com.graduation.project.engine.user.model.request.LoginRequestDto;
 import com.graduation.project.engine.user.model.request.RegisterRequestDto;
 import com.graduation.project.engine.user.model.request.UserUpdateRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
-import com.graduation.project.engine.user.model.response.UserResponseDto;
 import com.graduation.project.engine.user.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,7 @@ public class UserController {
     public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
 
         userService.forgotPassword(request.getEmail());
-        return ResponseEntity.ok("Successfuly mail sended !!");
+        return ResponseEntity.ok("Successfully mail sent !!");
 
     }
     @PostMapping("/change-password")
@@ -42,7 +41,7 @@ public class UserController {
 
 
         userService.changePassword(request);
-        return ResponseEntity.ok("Successfuly mail sended !!");
+        return ResponseEntity.ok("");
 
     }
     @PutMapping("/update-user/{userId}")

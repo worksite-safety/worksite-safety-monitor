@@ -6,28 +6,83 @@ import DateRangePickerComp from "./DatePickerComp";
 import AreaChart from './AreaChart';
 
 const ChartsContainer = () => {
-  const [barChart, setBarChart] = useState(true);
   const [data, setData] = useState([]);
+  const [periodicEventsData, setPeriodicEventsData] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [chartType, setChartType] = useState('area');
-  const renderChart = () => {
-    switch (chartType) {
+  const [countableEventsChartType, setCountableEventsChartType] = useState(
+      'bar');
+  const [periodicEventsChartType, setPeriodicEventsChartType] = useState(
+      'bar');
+
+  const keysAndColorsCountableBar = [
+    {key: 'fall', color: '#B799FF'},
+    {key: 'armsUp', color: '#ACBCFF'},
+    {key: 'frontBending', color: '#AEE2FF'},
+  ];
+
+  const keysAndColorsPeriodicEventsBar = [
+    {key: 'noHelmet', color: '#B799FF'},
+    {key: 'noJacket', color: '#ACBCFF'},
+  ];
+  const keysAndColorsCountableEventsLineChart = [
+    { key: 'fall', stroke: '#1D2B53', fill: '#B799FF' },
+    { key: 'armsUp', stroke: '#7E2553', fill: '#ACBCFF' },
+    { key: 'frontBending', stroke: '#525CEB', fill: '#AEE2FF' },
+  ];
+
+  const keysAndColorsPeriodicEventsLineChart = [
+    { key: 'noHelmet', stroke: '#1D2B53', fill: '#B799FF'},
+    { key: 'noJacket', stroke: '#7E2553', fill: '#ACBCFF' },
+  ];
+
+
+
+  const keysAndColorsCountableAreaChart = [
+    { key: 'fall', stroke: '#92C7CF', fill: '#B799FF', strokeDasharray: '5 5' },
+    { key: 'armsUp', stroke: '#AAD7D9', fill: '#ACBCFF', strokeDasharray: '5 5' },
+    { key: 'frontBending', stroke: '#86B6F6', fill: '#AEE2FF', strokeDasharray: '5 5' },
+  ];
+
+  const keysAndColorsPeriodicEventsAreaChart = [
+    { key: 'noHelmet', stroke: '#92C7CF', fill: '#B799FF', strokeDasharray: '5 5' },
+    { key: 'noJacket', stroke: '#AAD7D9', fill: '#ACBCFF', strokeDasharray: '5 5' },
+  ];
+  const renderCountableEventsChart = () => {
+    switch (countableEventsChartType) {
       case 'line':
-        return <LineChart data={data} />;
+        return <LineChart data={data} keysAndColors={keysAndColorsCountableEventsLineChart} />;
       case 'bar':
-        return <BarChart data={data} />;
+        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Count Of Events" />;
       case 'area':
-        return <AreaChart data={data} />;
+        return <AreaChart data={data} keysAndColors={keysAndColorsCountableAreaChart} />;
       case 'pie':
         //return <PieChart data={data} />;
+        // eslint-disable-next-line no-fallthrough
       default:
-        return <BarChart data={data} />;
+        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Count Of Events" />;
     }
   };
-  const fetchData = async (startDate, endDate) => {
+
+  const renderPeriodicEventsChart = () => {
+    switch (periodicEventsChartType) {
+      case 'line':
+        return <LineChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsLineChart} />;
+      case 'bar':
+        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Minutes)" />;
+      case 'area':
+        return <AreaChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsAreaChart} />;
+      case 'pie':
+        //return <PieChart data={periodicEventsData} />;
+        // eslint-disable-next-line no-fallthrough
+      default:
+        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Minutes)" />;
+    }
+  };
+  const fetchCountableEventsData = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/event/countable-events/${startDate}/${endDate}`);
+      const response = await fetch(
+          `http://localhost:8080/event/countable-events/${startDate}/${endDate}`);
       const jsonData = await response.json();
       setData(jsonData);
     } catch (error) {
@@ -36,7 +91,19 @@ const ChartsContainer = () => {
       setLoading(false);
     }
   };
-
+  const fetchPeriodicEventsData = async (startDate, endDate) => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+          `http://localhost:8080/event/periodic-events/${startDate}/${endDate}`);
+      const jsonData = await response.json();
+      setPeriodicEventsData(jsonData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     const today = new Date();
     const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -44,33 +111,71 @@ const ChartsContainer = () => {
     oneWeekAgo.setHours(0, 0, 1);
     today.setHours(23, 59, 59);
 
-    fetchData(oneWeekAgo.getTime(), today.getTime());
+    fetchCountableEventsData(oneWeekAgo.getTime(), today.getTime());
+    fetchPeriodicEventsData(oneWeekAgo.getTime(), today.getTime());
+
   }, []);
 
   return (
       <Wrapper>
         <h4>Total Countable Events History By Days</h4>
         <div>
-          <button type='button' onClick={() => setChartType('bar')}>
+          <button type='button'
+                  onClick={() => setCountableEventsChartType('bar')}>
             Bar Chart
           </button>
-          <button type='button' onClick={() => setChartType('line')}>
+          <button type='button'
+                  onClick={() => setCountableEventsChartType('line')}>
             Line Chart
           </button>
-          <button type='button' onClick={() => setChartType('area')}>
+          <button type='button'
+                  onClick={() => setCountableEventsChartType('area')}>
             Area Chart
           </button>
-          <button type='button' onClick={() => setChartType('pie')}>
+          <button type='button'
+                  onClick={() => setCountableEventsChartType('pie')}>
             Pie Chart
           </button>
         </div>
-        <DateRangePickerComp onApply={fetchData}/>
+        <DateRangePickerComp onApply={fetchCountableEventsData}/>
         {loading ? (
             <p>Loading...</p>
         ) : data.length === 0 ? (
             <h1>No data available</h1>
         ) : (
-            renderChart()
+            renderCountableEventsChart()
+        )}
+
+        <div className={"charts-container-buffer"}>
+
+        </div>
+
+        <h4>Duration of Periodic Events History By Days</h4>
+        <div>
+          <button type='button'
+                  onClick={() => setPeriodicEventsChartType('bar')}>
+            Bar Chart
+          </button>
+          <button type='button'
+                  onClick={() => setPeriodicEventsChartType('line')}>
+            Line Chart
+          </button>
+          <button type='button'
+                  onClick={() => setPeriodicEventsChartType('area')}>
+            Area Chart
+          </button>
+          <button type='button'
+                  onClick={() => setPeriodicEventsChartType('pie')}>
+            Pie Chart
+          </button>
+        </div>
+        <DateRangePickerComp onApply={fetchPeriodicEventsData}/>
+        {loading ? (
+            <p>Loading...</p>
+        ) : periodicEventsData.length === 0 ? (
+            <h1>No data available</h1>
+        ) : (
+            renderPeriodicEventsChart()
         )}
       </Wrapper>
   );

@@ -1,4 +1,4 @@
-package com.graduation.project.engine.event;
+package com.graduation.project.engine.event.model;
 
 public enum EventNameEnum {
 

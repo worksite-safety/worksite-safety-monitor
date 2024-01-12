@@ -3,12 +3,11 @@ import {
   AreaChart,
   Area,
   XAxis,
-  YAxis,
   CartesianGrid,
-  Tooltip, LineChart, Legend, Line,
+  Tooltip,Legend,
 } from 'recharts';
 
-const AreaChartComponent = ({ data }) => {
+const AreaChartComponent = ({ data, keysAndColors  }) => {
   console.log(data)
   return (
       <ResponsiveContainer width='100%' height={300}>
@@ -17,9 +16,16 @@ const AreaChartComponent = ({ data }) => {
           <XAxis dataKey='date' />
           <Tooltip />
           <Legend />
-          <Area type='monotone' dataKey='fall' stroke='#92C7CF' fill='#B799FF' strokeDasharray="5 5"/>
-          <Area type='monotone' dataKey='armsUp' stroke='#AAD7D9' fill='#ACBCFF' strokeDasharray="5 5"/>
-          <Area type='monotone' dataKey='frontBending' stroke='#86B6F6' fill='#AEE2FF' strokeDasharray="5 5"/>
+          {keysAndColors.map((keyAndColor, index) => (
+              <Area
+                  key={index}
+                  type='monotone'
+                  dataKey={keyAndColor.key}
+                  stroke={keyAndColor.stroke}
+                  fill={keyAndColor.fill}
+                  strokeDasharray={keyAndColor.strokeDasharray}
+              />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
   );
