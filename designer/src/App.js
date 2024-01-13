@@ -10,6 +10,7 @@ import {
     UserSharedLayout,
     Profile,
     Video,
+    Reporting,
     ChangePassword,
     ForgotPassword,
     UserProtectedRoute
@@ -40,6 +41,7 @@ function App() {
                     <Route index element={<ChartsContainer/>}/>
                     <Route path='statistics' element={<ChartsContainer/>}/>
                     <Route path='video' element={<Video/>}/>
+                    <Route path='reports' element={<Reporting/>}/>
                     <Route path='profile' element={<Profile/>}/>
 
 
