@@ -63,6 +63,7 @@ function Register() {
             email,
             password
         }))
+
     };
 
     const toggleMember = () => {
@@ -76,10 +77,10 @@ function Register() {
     useEffect(() => {
         if (user) {
             setTimeout(() => {
-                navigate('/')
+                navigate("/")
             }, 2000)
         }
-    }, [user])
+    }, [navigate, user])
 
 
     return (

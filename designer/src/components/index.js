@@ -11,8 +11,8 @@ import StatsContainer from "./StatsContainer";
 import StatItem from "./StatItem";
 import ChartsContainer from "./ChartsContainer";
 import BarChart from "./BarChart";
+import LineChart from "./LineChartComponent";
 import AreaChart from "./AreaChart";
-
 export {
     BigSidebar,
     NavBar,
@@ -27,5 +27,6 @@ export {
     StatsContainer,
     ChartsContainer,
     BarChart,
+    LineChart,
     AreaChart
 }

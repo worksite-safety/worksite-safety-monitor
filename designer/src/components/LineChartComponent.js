@@ -1,21 +1,17 @@
 import {
-    BarChart,
-    Bar,
+    ResponsiveContainer,
     XAxis,
-    YAxis,
     CartesianGrid,
-    Tooltip,
-    ResponsiveContainer, Label,
+    Tooltip, LineChart, Legend, Line, Label, YAxis,
 } from 'recharts';
 
-const BarChartComponent = ({ data, keysAndColors, yAxisTitle }) => {
+const LineChartComponent = ({ data, keysAndColors, yAxisTitle }) => {
+    console.log(data)
     return (
         <ResponsiveContainer width='100%' height={300}>
-            <BarChart data={data} margin={{ top: 50}}>
-                <CartesianGrid strokeDasharray='10 10 ' />
-                <XAxis dataKey='date' >
-
-                </XAxis>
+            <LineChart data={data} margin={{ top: 50 }}>
+                <CartesianGrid strokeDasharray='3 3' />
+                <XAxis dataKey='date' />
                 <YAxis type='number' allowDecimals={false}>
                     <Label
                         angle={-90}
@@ -24,17 +20,20 @@ const BarChartComponent = ({ data, keysAndColors, yAxisTitle }) => {
                     >
                         {yAxisTitle}
                     </Label>
-                </YAxis>                <Tooltip />
+                </YAxis>
+                <Tooltip />
+                <Legend />
                 {keysAndColors.map((keyAndColor, index) => (
-                    <Bar
+                    <Line
                         key={index}
+                        type='monotone'
                         dataKey={keyAndColor.key}
-                        fill={keyAndColor.color}
-                        barSize={75}
+                        stroke={keyAndColor.stroke}
+                        fill={keyAndColor.fill}
                     />
                 ))}
-            </BarChart>
+            </LineChart>
         </ResponsiveContainer>
     );
 };
-export default BarChartComponent;
+export default LineChartComponent;
