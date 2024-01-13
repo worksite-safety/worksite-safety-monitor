@@ -5,6 +5,7 @@ import ForgotPassword from "./ForgotPassword";
 import ChangePassword from "./ChangePassword";
 import Profile from "./Profile";
 import Video from "./Video";
+import Reporting from "./Reporting";
 import UserSharedLayout from "./UserSharedLayout";
 import UserProtectedRoute from "./UserProtectedRoute";
 
@@ -17,4 +18,6 @@ export {
     Profile,
     Video,
     UserSharedLayout,
-    UserProtectedRoute}
+    UserProtectedRoute,
+    Reporting
+}
