@@ -30,13 +30,6 @@ public class EventService {
     return eventRepository.findAll();
   }
 
-  private List<Event> getAllEventsByEventTypes(List<String> eventTypes, Long startDate,
-      Long endDate) {
-
-    return eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(eventTypes,
-        startDate, endDate);
-  }
-
   public List<CountableEvents> getAllCountableEventsByDateIntervals(Long startDate, Long endDate) {
     List<Event> eventList = getAllEventsByEventTypes(
         Arrays.asList(EventNameEnum.FALL.name(), EventNameEnum.ARMS_UP.name(),
@@ -66,7 +59,6 @@ public class EventService {
   }
 
 
-
   public List<PeriodicEvents> getAllPeriodicEventsByDateIntervals(Long startDate, Long endDate) {
     List<Event> eventList = getAllEventsByEventTypes(
         Arrays.asList(EventNameEnum.NO_HELMET.name(), EventNameEnum.NO_JACKET.name()),
@@ -76,7 +68,12 @@ public class EventService {
   }
 
 
+  private List<Event> getAllEventsByEventTypes(List<String> eventTypes, Long startDate,
+      Long endDate) {
 
+    return eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(eventTypes,
+        startDate, endDate);
+  }
 
   private List<PeriodicEvents> calculatePeriodicEvents(List<Event> eventList) {
     List<PeriodicEvents> periodicEventsList = new ArrayList<>();
@@ -84,7 +81,6 @@ public class EventService {
     for (Event event : eventList) {
       LocalDate eventDate = LocalDate.ofEpochDay(event.getStartTime() / (24 * 60 * 60 * 1000));
       String formattedDate = eventDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
-
 
       int noHelmetMinutes = 0;
       int noJacketMinutes = 0;
@@ -113,7 +109,8 @@ public class EventService {
     return periodicEventsList;
   }
 
-  private PeriodicEvents findPeriodicEventsByDate(List<PeriodicEvents> periodicEventsList, String date) {
+  private PeriodicEvents findPeriodicEventsByDate(List<PeriodicEvents> periodicEventsList,
+      String date) {
     return periodicEventsList.stream()
         .filter(entry -> entry.getDate().equals(date))
         .findFirst()
