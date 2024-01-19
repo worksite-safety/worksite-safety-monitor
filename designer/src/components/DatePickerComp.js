@@ -3,17 +3,41 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "./datePicker.css";
 import {toast} from "react-toastify";
+import EmailIcon from '@mui/icons-material/Email';
+import {useSelector} from "react-redux";
+import customFetch from "../util/axios";
 
-const DateRangePickerComp = ({ onApply }) => {
+const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) => {
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
+  const [loading, setLoading] = useState(false); // Added loading state
+  const {isLoading, user} = useSelector((store) => store.user);
 
   const applyDates = () => {
     if (startDate && endDate) {
       onApply(startDate.getTime(), endDate.getTime());
     }
   };
+  const applyReportSend = async () => {
+    if (startDate && endDate) {
+      setLoading(true);
+      try {
+        // API request using customFetch
+        const response = await customFetch.post(`/event/sendPdfEmail/${startDate.getTime()}/${endDate.getTime()}/${user.email}`);
+        if (response.status === 200) {
 
+          toast.success("Report sent successfully!");
+        } else {
+          toast.error("Failed to send report.");
+        }
+      } catch (error) {
+        console.error("Error sending report:", error);
+        toast.error("Error sending report.");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
   useEffect(() => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -75,11 +99,31 @@ const DateRangePickerComp = ({ onApply }) => {
             className="date-picker-input"
             maxDate={new Date()}
         />
-        <button onClick={applyDates} className="apply-button">
-          Apply
-        </button>
+        {applyButtonLabel && applyButtonLabel.includes("Send Report") ? (
+            <button
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  marginRight: 10,
+                  backgroundColor: "#4CAF50",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "5px",
+                  cursor: loading ? "not-allowed" : "pointer", // Disable button during loading
+                }}
+                onClick={applyReportSend}
+                disabled={loading} // Disable button during loading
+            >
+              <EmailIcon />
+              Send Report
+            </button>
+        ) : (
+            <button onClick={applyDates} className="apply-button">
+              {applyButtonLabel || "Apply"}
+            </button>
+        )}
         <button onClick={clearDates} className="apply-button">
-          Clear
+          {clearButtonLabel || "Clear"}
         </button>
       </div>
   );

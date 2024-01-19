@@ -1,6 +1,5 @@
 package com.graduation.project.engine.email.service;
 
-import com.graduation.project.engine.email.models.Mail;
 import com.graduation.project.engine.user.model.User;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -9,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -65,7 +65,7 @@ public class MailService {
   }
 
   @SneakyThrows
-  public void sendForgotPasswordEmail(User user, String hashedEmailUrl) throws MessagingException {
+  public void sendForgotPasswordEmail(User user, String hashedEmailUrl) {
 
     MimeMessage mimeMessage = javaMailSender.createMimeMessage();
     MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
@@ -109,6 +109,25 @@ public class MailService {
         + "</html>";
 
     mimeMessageHelper.setText(htmlContent, true);
+
+    javaMailSender.send(mimeMessage);
+  }
+
+  @SneakyThrows
+  public void sendEventsPdfEmail(String recipient, byte[] pdfData) {
+    MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+    MimeMessageHelper mimeMessageHelper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+
+    mimeMessageHelper.setFrom(fromMail);
+    mimeMessageHelper.setTo(recipient);
+
+    String subject = "Events Data PDF Attachment";
+    mimeMessageHelper.setSubject(subject);
+
+    String htmlContent = "Please find attached the PDF containing events data.";
+
+    mimeMessageHelper.setText(htmlContent, true);
+    mimeMessageHelper.addAttachment("events_data.pdf", new ByteArrayResource(pdfData));
 
     javaMailSender.send(mimeMessage);
   }

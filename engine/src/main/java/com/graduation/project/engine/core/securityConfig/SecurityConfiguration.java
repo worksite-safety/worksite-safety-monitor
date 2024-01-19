@@ -32,6 +32,7 @@ public class SecurityConfiguration {
       "/auth/update-user/**",
       "/event/all-events",
       "/event/periodic-events/**",
+      "/event/sendPdfEmail/**",
       "/auth/register",
       "/docs/**",
       "/mail/**",

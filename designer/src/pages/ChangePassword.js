@@ -4,7 +4,7 @@ import Wrapper from '../assets/wrappers/RegisterPage';
 import {toast} from "react-toastify";
 import {useDispatch, useSelector} from "react-redux";
 import {changePassword} from "../features/user/userSlice";
-import {useLocation, useNavigate, useParams} from "react-router-dom";
+import {useLocation, useNavigate} from "react-router-dom";
 
 const initialState = {
     password: '',
@@ -66,7 +66,7 @@ function ChangePassword() {
     return (
         <Wrapper className='full-page'>
             <form className='form' onSubmit={onSubmit}>
-                <h3>Forgot Password</h3>
+                <h3>Change Password</h3>
                 <FormRow type={'password'}
                          labelText={"Password"}
                          name={'password'}

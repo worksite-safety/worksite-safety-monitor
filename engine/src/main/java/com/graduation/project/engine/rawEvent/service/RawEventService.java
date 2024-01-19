@@ -1,12 +1,10 @@
 package com.graduation.project.engine.rawEvent.service;
 
-import com.graduation.project.engine.email.models.Mail;
 import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.repository.EventRepository;
 import com.graduation.project.engine.rawEvent.model.RawEvent;
 import com.graduation.project.engine.user.model.User;
-import com.graduation.project.engine.user.model.converter.User2UserResponseDtoConverter;
 import com.graduation.project.engine.user.model.converter.UserResponseDto2UserConverter;
 import com.graduation.project.engine.user.service.UserService;
 import java.time.LocalDateTime;
@@ -25,7 +23,6 @@ public class RawEventService {
   private final EventRepository eventRepository;
   private final MailService mailService;
   private final UserService userService;
-  private final User2UserResponseDtoConverter user2UserResponseDtoConverter;
   private final UserResponseDto2UserConverter userResponseDto2UserConverter;
 
   Logger logger = LoggerFactory.getLogger(RawEventService.class);
@@ -43,14 +40,10 @@ public class RawEventService {
       }
 
     }
-    if (data.getEventType().equals("armsUp")) {
-      //countableEventsRepository.save(CountableEvents.builder().armsUp());
-    }
 
     eventRepository.save(Event.builder()
         .eventType(data.getEventType())
         .startTime(data.getStartTime())
-        .endTime(data.getEndTime())
         .cameraName(data.getCameraName())
         .timePeriod(data.getTimePeriod())
         .isProcessed(data.getIsProcessed())
