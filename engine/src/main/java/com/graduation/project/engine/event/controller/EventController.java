@@ -10,6 +10,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,11 +33,17 @@ public class EventController {
 
     return eventService.getAllCountableEventsByDateIntervals(startDate, endDate);
   }
+
   @GetMapping("/periodic-events/{startDate}/{endDate}")
   public List<PeriodicEvents> getAllPeriodicEvents(@PathVariable("startDate") Long startDate,
       @PathVariable("endDate") Long endDate) {
 
     return eventService.getAllPeriodicEventsByDateIntervals(startDate, endDate);
+  }
+
+  @DeleteMapping("/delete-events/{eventId}")
+  public void getAllEvents(@PathVariable("eventId") String eventId) {
+    eventService.deletePeriodicEventById(eventId);
   }
 
   @GetMapping("/all-events")

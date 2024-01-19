@@ -6,6 +6,10 @@ import Wrapper from '../assets/wrappers/ChartsContainer';
 import {useSelector} from "react-redux";
 import customFetch, {checkForUnauthorizedResponse} from "../util/axios";
 import {toast} from "react-toastify";
+import { DataGrid, GridToolbar, GridToolbarFilterButton } from '@mui/x-data-grid';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import customFetch from "../util/axios";
+
 
 const VISIBLE_FIELDS = ['eventType', 'startTime', 'timePeriod', 'cameraName'];
 
@@ -21,6 +25,34 @@ export default function ControlledSort() {
   const [events, setEvents] = useState(
       'bar');
   const {isLoading, user} = useSelector((store) => store.user);
+    const [rows, setRows] = React.useState([]);
+    const [loading, setLoading] = React.useState(true);
+    const [sortModel, setSortModel] = React.useState([
+        {
+            field: 'startTime',
+            sort: 'desc',
+        },
+    ]);
+    const handleDeleteRow = async (id) => {
+        try {
+            // Assuming there is a unique identifier named 'id' for each row
+            const response = await customFetch.delete(`event/delete-events/${id}`);
+
+            if (response.status === 200) {
+                // If the API call is successful, update the state to remove the deleted row
+                const updatedRows = rows.filter((row) => row.id !== id);
+                setRows(updatedRows);
+            } else {
+                // Handle error if the API call is not successful
+                console.error('Failed to delete the row:', response.statusText);
+            }
+        } catch (error) {
+            // Handle any network or unexpected errors
+            console.error('Error while deleting the row:', error.message);
+        }
+    };
+
+
 
   React.useEffect(() => {
     const fetchCountableEventsData = async (startDate, endDate) => {
@@ -66,6 +98,22 @@ export default function ControlledSort() {
       setEvents(jsonData);
     } catch (error) {
       console.error("Error fetching data:", error);
+    const columns = [
+        ...VISIBLE_FIELDS.map((field) => ({ field, headerName: field, flex: 1 })),
+        {
+            field: 'actions',
+            headerName: 'Actions',
+            flex: 1,
+            sortable: false,
+            renderCell: (params) => (
+                <DeleteOutlineIcon
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleDeleteRow(params.row.id)}
+                />
+            ),
+        },
+    ];
+
 
       if (error.response) {
         const unauthorizedError = checkForUnauthorizedResponse(error, null);
