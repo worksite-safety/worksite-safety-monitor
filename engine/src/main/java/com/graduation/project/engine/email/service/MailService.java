@@ -80,7 +80,6 @@ public class MailService {
 
     String resetPasswordLink = "http://localhost:3000/change-password?token=" + hashedEmailUrl;
 
-    // Create an HTML message using a beautiful template
     String htmlContent = "<html>"
         + "<head>"
         + "<style>"
