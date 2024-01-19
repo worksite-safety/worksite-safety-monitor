@@ -6,6 +6,15 @@ import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
 import com.graduation.project.engine.event.repository.EventRepository;
+import com.itextpdf.text.Document;
+import com.itextpdf.text.Element;
+import com.itextpdf.text.Font;
+import com.itextpdf.text.Paragraph;
+import com.itextpdf.text.Phrase;
+import com.itextpdf.text.pdf.PdfPCell;
+import com.itextpdf.text.pdf.PdfPTable;
+import com.itextpdf.text.pdf.PdfWriter;
+import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -77,6 +86,76 @@ public class EventService {
     eventRepository.deleteById(eventId);
 
   }
+  public List<Event> getAllEventsByDateIntervals(Long startDate, Long endDate) {
+    return getAllEventsByEventTypes(
+        Arrays.asList(EventNameEnum.FALL.name(), EventNameEnum.ARMS_UP.name(),
+            EventNameEnum.FRONT_BEND.name(), EventNameEnum.NO_HELMET.name(), EventNameEnum.NO_JACKET.name()),
+        startDate, endDate);
+  }
+
+
+
+  public ByteArrayOutputStream generateEventsPdf(List<Event> events, Long startDate, Long endDate) {
+    ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+
+    try {
+      Document document = new Document();
+      PdfWriter.getInstance(document, byteArrayOutputStream);
+      document.open();
+      document.addTitle("Requested Event Report");
+
+
+      // Add Master Title
+      Paragraph masterTitle = new Paragraph(
+          "Event Report between " + getFormattedDateTime(startDate) +
+              " and " + getFormattedDateTime(endDate),
+          new Font(Font.FontFamily.HELVETICA, 18, Font.BOLD));
+      masterTitle.setAlignment(Element.ALIGN_CENTER);
+      document.add(masterTitle);
+
+      document.add(new Paragraph("\n"));
+
+      PdfPTable table = new PdfPTable(3);
+
+      PdfPCell titleCellDate = new PdfPCell(new Phrase("Event Date"));
+      PdfPCell titleCellType = new PdfPCell(new Phrase("Event Type"));
+      PdfPCell titleCellDetails = new PdfPCell(new Phrase("Details"));
+
+      table.addCell(titleCellDate);
+      table.addCell(titleCellType);
+      table.addCell(titleCellDetails);
+
+      table.completeRow();
+
+      for (Event event : events) {
+        table.addCell(getFormattedDateTime(event.getStartTime()));
+        table.addCell(event.getEventType());
+
+        if (EventNameEnum.NO_HELMET.name().equals(event.getEventType()) ||
+            EventNameEnum.NO_JACKET.name().equals(event.getEventType())) {
+          table.addCell("Time Period: " + event.getTimePeriod());
+        }
+
+        table.completeRow();
+      }
+
+      document.add(table);
+
+      document.close();
+
+      return byteArrayOutputStream;
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+
+    return byteArrayOutputStream;
+  }
+
+  private String getFormattedDateTime(Long timestamp) {
+    return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault())
+        .format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+  }
+
 
   private List<Event> getAllEventsByEventTypes(List<String> eventTypes, Long startDate,
       Long endDate) {
