@@ -1,0 +1,57 @@
+/* YourComponent.css */
+
+.user-profile-form {
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.form-container {
+  display: flex;
+  justify-content: space-between;
+}
+
+.user-info {
+  width: calc(150%); /* Adjust the width as needed */
+  padding: 10px;
+  border-radius: 5px;
+  margin-right: 150px;
+}
+
+.change-password-section {
+  width: calc(100%); /* Adjust the width as needed */
+}
+
+.password-fields {
+  display: flex;
+  flex-direction: column;
+}
+
+label {
+  margin-bottom: 10px;
+}
+
+.password-input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.submit-btn {
+  background-color: #4caf50;
+  color: white;
+  padding: 10px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s; /* Add smooth transition */
+}
+
+.submit-btn:disabled {
+  background-color: #a0a0a0;
+  cursor: not-allowed;
+}
+
+.submit-btn:hover {
+  background-color: #3498db; /* Change color on hover */
+}

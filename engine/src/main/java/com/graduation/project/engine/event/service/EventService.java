@@ -1,5 +1,6 @@
 package com.graduation.project.engine.event.service;
 
+import com.graduation.project.engine.core.exception.EntityNotFoundException;
 import com.graduation.project.engine.event.model.EventNameEnum;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.Event;
@@ -19,6 +20,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
+import static com.graduation.project.engine.core.exception.constant.ErrorConstant.USER_NOT_FOUND_MESSAGE;
+import static com.graduation.project.engine.core.exception.constant.ErrorConstant.errorMessageParser;
 
 @Service
 @RequiredArgsConstructor
@@ -67,6 +71,12 @@ public class EventService {
     return calculatePeriodicEvents(eventList);
   }
 
+  public void deletePeriodicEventById(String eventId) {
+    eventRepository.findById(eventId).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, eventId)));
+    eventRepository.deleteById(eventId);
+
+  }
 
   private List<Event> getAllEventsByEventTypes(List<String> eventTypes, Long startDate,
       Long endDate) {

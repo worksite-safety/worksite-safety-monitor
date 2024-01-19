@@ -5,6 +5,7 @@ import {useDispatch, useSelector} from 'react-redux';
 import {toast} from 'react-toastify';
 import {updateUser} from '../features/user/userSlice';
 import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined';
+import './profile.css';
 import {
   EmailOutlined, BadgeOutlined, AbcOutlined
 } from "@mui/icons-material";
@@ -53,45 +54,48 @@ const Profile = () => {
 
   return (
       <Wrapper>
-        <form className='form' onSubmit={handleSubmit}>
-          <h3>User Information</h3>
-          <div>
-            <h4><BadgeOutlined/>User Name: {userData.name} {userData.lastName}
-            </h4>
-          </div>
-          <div>
-            <div>
-
-              <div>
-                <h4><EmailOutlined/> Email:{userData.email}</h4>
+        <form className='user-profile-form' onSubmit={handleSubmit}>
+          <div className='form-container'>
+            <div className='user-info'>
+              <h2>User Information</h2>
+              <div className='user-details'>
+                <h3>
+                  <BadgeOutlined /> {userData.name} {userData.lastName}
+                </h3>
+                <h4 className='user-email'>
+                  <EmailOutlined /> {userData.email}
+                </h4>
               </div>
             </div>
-          </div>
-          <div>
-            <br/>
-            <br/><br/><br/>
-            <h3>Change Password </h3>
-            <div>
-              <FormRow
-                  type='password'
-                  name='newPassword'
-                  labelText={"New Password"}
-                  value={userUpdateData.newPassword}
-                  handleChange={handleChange}
-              />
 
-              <FormRow
-                  type='password'
-                  labelText={"Confirm Password"}
-                  name='newPasswordConfirm'
-                  value={userUpdateData.newPasswordConfirm}
-                  handleChange={handleChange}
-              />
-              <button className='btn btn-block' type='submit'
-                      disabled={isLoading}>
-                {isLoading ? 'Please Wait...'
-                    : 'Update Information'}
-              </button>
+            <div className='change-password-section'>
+              <h2>Change Password</h2>
+              <div className='password-fields'>
+                <label>
+                  New Password:
+                  <input
+                      type='password'
+                      name='newPassword'
+                      value={userUpdateData.newPassword}
+                      onChange={handleChange}
+                      className='password-input'
+                  />
+                </label>
+                <label>
+                  Confirm Password:
+                  <input
+                      type='password'
+                      name='newPasswordConfirm'
+                      value={userUpdateData.newPasswordConfirm}
+                      onChange={handleChange}
+                      className='password-input'
+                  />
+                </label>
+
+                <button className='submit-btn' type='submit' disabled={isLoading}>
+                  {isLoading ? 'Please Wait...' : 'Update Information'}
+                </button>
+              </div>
             </div>
           </div>
         </form>
