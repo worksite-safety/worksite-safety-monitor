@@ -1,5 +1,6 @@
 package com.graduation.project.engine.event.service;
 
+import com.graduation.project.engine.core.exception.EntityNotFoundException;
 import com.graduation.project.engine.event.model.EventNameEnum;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.Event;
