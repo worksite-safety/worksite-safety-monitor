@@ -8,7 +8,8 @@ import customFetch, {checkForUnauthorizedResponse} from "../util/axios";
 import {toast} from "react-toastify";
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
-const VISIBLE_FIELDS = ['eventType', 'startTime','confidencePercentage', 'timePeriod', 'cameraName'];
+const VISIBLE_FIELDS = ['eventType', 'startTime', 'confidencePercentage',
+  'timePeriod', 'cameraName'];
 
 export default function ControlledSort() {
   const [events, setEvents] = useState(
@@ -30,12 +31,16 @@ export default function ControlledSort() {
     cameraName: 'Camera Name',
   };
 
-
   const fetchCountableEventsData = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/event/all-events`);
-      const jsonData = await response.json();
+      const response = await customFetch.get('event/all-events', {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      });
+
+      const jsonData = response.data;
 
       const modifiedRows = jsonData.map((row) => ({
         ...row,
@@ -59,7 +64,6 @@ export default function ControlledSort() {
     }
   };
 
-
   React.useEffect(() => {
     const today = new Date();
     const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -71,7 +75,11 @@ export default function ControlledSort() {
 
   const handleDeleteRow = async (id) => {
     try {
-      const response = await customFetch.delete(`event/delete-events/${id}`);
+      const response = await customFetch.delete(`event/delete-events/${id}`, {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      });
 
       if (response.status === 200) {
         const updatedRows = rows.filter((row) => row.id !== id);
@@ -93,8 +101,12 @@ export default function ControlledSort() {
     setLoading(true);
     try {
       const response = await customFetch.post(
-          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`
-      );
+          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`, {
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+            },
+          });
+
       const jsonData = response.data;
       toast.success("Report sent successfully!");
       setEvents(jsonData);

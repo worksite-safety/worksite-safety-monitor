@@ -38,6 +38,13 @@ public class GenericExceptionHandler extends ResponseEntityExceptionHandler {
         GenericExceptionSignature entityAlreadyExistsException = new GenericExceptionSignature(e.getMessage(), badRequest, ZonedDateTime.now(ZoneId.of("Z")), ErrorCode.ENTITY_ALREADY_EXISTS.getCode(), ErrorCode.ENTITY_ALREADY_EXISTS.getMessage());
         return new ResponseEntity<>(entityAlreadyExistsException, badRequest);
     }
+    @ExceptionHandler(value = {PasswordWrongException.class})
+    public ResponseEntity<Object> handleAException(PasswordWrongException e) {
+        HttpStatus badRequest = HttpStatus.UNAUTHORIZED;
+        GenericExceptionSignature entityAlreadyExistsException = new GenericExceptionSignature(e.getMessage(), badRequest, ZonedDateTime.now(ZoneId.of("Z")), ErrorCode.UNAUTHORIZED.getCode(), ErrorCode.UNAUTHORIZED.getMessage());
+        return new ResponseEntity<>(entityAlreadyExistsException, badRequest);
+    }
+
 
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {

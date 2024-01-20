@@ -39,7 +39,7 @@ public class JwtService {
                 .claim("authorities", userDetails.getAuthorities())
                 .setSubject(userDetails.getUsername())
                 .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 15))
+                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 20))
                 .signWith(getSignInKey(), SignatureAlgorithm.HS256)
                 .compact();
     }
@@ -58,7 +58,6 @@ public class JwtService {
     }
 
     private Claims extractAllClaims(String token) {
-        System.out.println(token);
         return Jwts.parserBuilder()
                 .setSigningKey(getSignInKey())
                 .build().parseClaimsJws(token).getBody();

@@ -1,34 +1,53 @@
-/* YourComponent.css */
+.profile-wrapper {
+  align-items: normal !important;
+  grid-template-columns: 500px 1fr;
+  column-gap: 20px;
+}
+
+@media screen and (max-width: 1200px) {
+  .profile-wrapper {
+    row-gap: 20px;
+    grid-template-columns: 1fr;
+  }
+}
 
 .user-profile-form {
-  margin: 0 auto;
+  background-color: white;
   padding: 20px;
+  border-radius: 12px
 }
 
 .form-container {
-  display: flex;
-  justify-content: space-between;
+  display: block;
+  background-color: white;
 }
 
 .user-info {
-  width: calc(150%); /* Adjust the width as needed */
-  padding: 10px;
-  border-radius: 5px;
-  margin-right: 150px;
+  background-color: white;
+  padding: 20px;
+  border-radius: 12px;
 }
 
 .change-password-section {
-  width: calc(100%); /* Adjust the width as needed */
+  width: calc(100%);
 }
 
 .password-fields {
   display: flex;
   flex-direction: column;
+  gap:4px;
 }
 
-label {
-  margin-bottom: 10px;
+.input-w-label {
+  white-space: nowrap;
+  display: flex;
+  justify-content: space-between;
 }
+
+.input-w-label input {
+  width:calc(100% - 150px);
+}
+
 
 .password-input {
   padding: 10px;
@@ -38,13 +57,16 @@ label {
 }
 
 .submit-btn {
+  align-self: flex-end;
+  width: 200px;
   background-color: #4caf50;
   color: white;
   padding: 10px 15px;
   border: none;
+  margin-top: 8px;
   border-radius: 5px;
   cursor: pointer;
-  transition: background-color 0.3s; /* Add smooth transition */
+  transition: background-color 0.3s;
 }
 
 .submit-btn:disabled {
@@ -53,5 +75,5 @@ label {
 }
 
 .submit-btn:hover {
-  background-color: #3498db; /* Change color on hover */
+  background-color: #3498db;
 }

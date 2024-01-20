@@ -5,7 +5,7 @@ import {PureComponent} from "react";
 import {render} from "react-dom";
 
 
-const COLORS = ['#7e2553', '#92c7cf', '#b799ff'];
+const COLORS = ['#86b6f6', '#92c7cf', '#b799ff'];
 const RADIAN = Math.PI / 180;
 
 const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {

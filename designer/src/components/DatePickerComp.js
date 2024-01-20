@@ -22,10 +22,16 @@ const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) =>
     if (startDate && endDate) {
       setLoading(true);
       try {
-        // API request using customFetch
-        const response = await customFetch.post(`/event/sendPdfEmail/${startDate.getTime()}/${endDate.getTime()}/${user.email}`);
+        const response = await customFetch.post(
+            `/event/sendPdfEmail/${startDate.getTime()}/${endDate.getTime()}/${user.email}`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${user.token}`,
+              },
+            }
+        );
         if (response.status === 200) {
-
           toast.success("Report sent successfully!");
         } else {
           toast.error("Failed to send report.");
@@ -38,6 +44,7 @@ const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) =>
       }
     }
   };
+
   useEffect(() => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);

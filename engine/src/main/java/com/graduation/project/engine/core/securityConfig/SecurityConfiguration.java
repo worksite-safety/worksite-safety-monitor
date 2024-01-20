@@ -27,7 +27,12 @@ public class SecurityConfiguration {
   private static final String[] PUBLIC_URLS = {
       "/auth/forgot-password",
       "/auth/change-password",
+      "/auth/register",
       "/auth/login",
+      "/docs/**",
+      "/mail/**"
+  };
+  private static final String[] ADMIN_URLS = {
       "/event/countable-events/**",
       "/event/delete-events/**",
       "/auth/update-user/**",
@@ -35,20 +40,8 @@ public class SecurityConfiguration {
       "/event/periodic-events/**",
       "/event/sendPdfEmail/**",
       "/event/pie-chart-events/**",
-      "/auth/register",
-      "/docs/**",
-      "/mail/**",
-
-
   };
-  private static final String[] ADMIN_URLS = {
-      "/auth/role/**",
-      "/auth/{id}",
-  };
-  private static final String[] USER_URLS = {
-      "/demo/authreq"
 
-  };
 
   @Bean
   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -57,9 +50,7 @@ public class SecurityConfiguration {
         .disable().cors(Customizer.withDefaults())
         .authorizeHttpRequests()
         .requestMatchers(PUBLIC_URLS).permitAll()
-        .requestMatchers(USER_URLS)
-        .hasAnyAuthority(Role.ADMIN.name(), Role.USER.name(), Role.MANAGER.name())
-        .requestMatchers(ADMIN_URLS).hasAnyAuthority(Role.ADMIN.name(), Role.MANAGER.name())
+        .requestMatchers(ADMIN_URLS).hasAnyAuthority(Role.ADMIN.name())
         .anyRequest()
         .authenticated()
         .and()
