@@ -1,6 +1,5 @@
 package com.graduation.project.engine.email.controller;
 
-import com.graduation.project.engine.email.models.Mail;
 import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.user.model.User;
 import java.time.LocalDateTime;

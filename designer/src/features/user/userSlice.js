@@ -23,7 +23,6 @@ export const registerUser = createAsyncThunk(
             const resp = await customFetch.post('/auth/register ', user);
             return resp.data;
         } catch (error) {
-            console.log(error)
             if (error.response.data.status === 400) {
                 toast.error(JSON.stringify(error.response.data.errors))
             }
@@ -41,6 +40,9 @@ export const loginUser = createAsyncThunk(
             const resp = await customFetch.post('/auth/login', user);
             return resp.data;
         } catch (error) {
+            if (error.response.status === 401) {
+                toast.error(error.response.data.message)
+            }
             return thunkAPI.rejectWithValue(error.response.data[0].message);
         }
     })
@@ -93,28 +95,6 @@ export const updateUser = createAsyncThunk(
         return updateUserThunk('/auth/update-user', user, thunkAPI);
     }
 );
-export const updateUserProfilePicture = createAsyncThunk(
-    'user/updateUserProfilePicture',
-    async (formData, thunkAPI) => {
-        const userId = thunkAPI.getState().user.user.id;
-        try {
-            const response = await updateUserProfilePictureThunk(
-                `/auth/profile-image/${userId}`,
-                formData,
-                thunkAPI
-            );
-            return response.data;
-        } catch (error) {
-            if (error.response.status === 403) {
-                thunkAPI.dispatch(logoutUser());
-                return thunkAPI.rejectWithValue('Unauthorized! Logging Out...');
-            }
-            return thunkAPI.rejectWithValue(error.response.data.msg);
-        }
-    }
-);
-
-
 
 
 const userSlice = createSlice({
@@ -168,7 +148,7 @@ const userSlice = createSlice({
             state.user = user;
 
             addUserToLocalStorage(user);
-            toast.success('User Updated');
+            toast.success('Password Changed Successfully!');
         },
         [updateUser.rejected]: (state, {payload}) => {
             state.isLoading = false;

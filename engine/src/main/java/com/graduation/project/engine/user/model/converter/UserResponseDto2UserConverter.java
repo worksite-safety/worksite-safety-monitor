@@ -9,22 +9,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserResponseDto2UserConverter {
 
-    public User convert(UserResponseDto from){
-        return new User(from.getUserId(),
-                from.getFirstName(),
-                from.getLastName(),
-                from.getEmail(),
-                from.getRole()
-        );
-    }
-    public List<User> convert(List<UserResponseDto> users) {
-        return users.stream().map(userDto -> User.builder()
-                .email(userDto.getEmail())
-                .firstName(userDto.getFirstName())
-                .lastName(userDto.getLastName())
-                .role(userDto.getRole())
-                .build())
-            .collect(Collectors.toList());
-    }
+  public User convert(UserResponseDto from) {
+    return new User(from.getUserId(),
+        from.getFirstName(),
+        from.getLastName(),
+        from.getEmail(),
+        from.getRole()
+    );
+  }
+
+  public List<User> convert(List<UserResponseDto> users) {
+    return users.stream().map(userDto -> User.builder()
+            .email(userDto.getEmail())
+            .firstName(userDto.getFirstName())
+            .lastName(userDto.getLastName())
+            .role(userDto.getRole())
+            .build())
+        .collect(Collectors.toList());
+  }
 
 }

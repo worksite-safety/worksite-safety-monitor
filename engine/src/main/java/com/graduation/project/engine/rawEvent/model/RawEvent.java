@@ -14,10 +14,10 @@ import java.math.BigDecimal;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RawEvent {
 
-    private String cameraName;
-    private String confidencePercentage;
-    private String eventType;
-    private String isProcessed;
-    private BigDecimal timePeriod;
-    private Long startTime;
+  private String cameraName;
+  private BigDecimal confidencePercentage;
+  private String eventType;
+  private String isProcessed;
+  private BigDecimal timePeriod;
+  private Long startTime;
 }

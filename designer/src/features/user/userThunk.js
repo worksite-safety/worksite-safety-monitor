@@ -30,17 +30,20 @@ export const clearStoreThunk = async (message, thunkAPI) => {
 export const updateUserThunk = async (url, user, thunkAPI) => {
     try {
         const resp = await customFetch.put(`/auth/update-user/${thunkAPI.getState().user.user.id}`, user, {
+            headers: {
+                Authorization: `Bearer ${thunkAPI.getState().user.user.token}`,
+            },
         });
         return resp.data;
     } catch (error) {
         if (error.response.status === 403) {
-
             thunkAPI.dispatch(logoutUser());
             return thunkAPI.rejectWithValue('Unauthorized! Logging Out...');
         }
         return thunkAPI.rejectWithValue(error.response.data.msg);
     }
 };
+
 export const updateUserProfilePictureThunk = async (url, formData, thunkAPI) => {
     try {
         const response = await customFetch.post(url, formData, {

@@ -4,7 +4,10 @@ import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
+import com.graduation.project.engine.event.model.response.PieChartResponseDto;
 import com.graduation.project.engine.event.service.EventService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +31,11 @@ public class EventController {
 
 
   @GetMapping("/countable-events/{startDate}/{endDate}")
+  @Operation(
+      description = "Get all countable events within a date range",
+      summary = "Get Countable Events",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
   public List<CountableEvents> getAllCountableEvents(@PathVariable("startDate") Long startDate,
       @PathVariable("endDate") Long endDate) {
 
@@ -35,6 +43,11 @@ public class EventController {
   }
 
   @GetMapping("/periodic-events/{startDate}/{endDate}")
+  @Operation(
+      description = "Get all periodic events within a date range",
+      summary = "Get Periodic Events",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
   public List<PeriodicEvents> getAllPeriodicEvents(@PathVariable("startDate") Long startDate,
       @PathVariable("endDate") Long endDate) {
 
@@ -42,18 +55,34 @@ public class EventController {
   }
 
   @DeleteMapping("/delete-events/{eventId}")
+  @Operation(
+      description = "Delete a specific event by ID",
+      summary = "Delete Event",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
   public void getAllEvents(@PathVariable("eventId") String eventId) {
     eventService.deletePeriodicEventById(eventId);
   }
 
   @GetMapping("/all-events")
+  @Operation(
+      description = "Get all events",
+      summary = "Get All Events",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
   public List<Event> getAllEvents() {
     return eventService.getAllEvents();
   }
 
   @PostMapping("/sendPdfEmail/{startDate}/{endDate}/{emailReceiver}")
+  @Operation(
+      description = "Send a PDF email containing events within a date range",
+      summary = "Send PDF Email",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
   public ResponseEntity<String> sendPdfEmail(
-      @PathVariable Long startDate, @PathVariable Long endDate, @PathVariable String emailReceiver) {
+      @PathVariable Long startDate, @PathVariable Long endDate,
+      @PathVariable String emailReceiver) {
     List<Event> events = eventService.getAllEventsByDateIntervals(startDate, endDate);
     ByteArrayOutputStream pdfStream = eventService.generateEventsPdf(events, startDate, endDate);
 
@@ -64,5 +93,17 @@ public class EventController {
       e.printStackTrace();
       return ResponseEntity.status(500).body("Error sending email");
     }
+  }
+
+  @GetMapping("/pie-chart-events/{startDate}/{endDate}")
+  @Operation(
+      description = "Get pie chart data for events within a date range",
+      summary = "Get Pie Chart Events",
+      security = @SecurityRequirement(name = "bearerAuth")
+  )
+  public List<PieChartResponseDto> getPieChartEvents(@PathVariable("startDate") Long startDate,
+      @PathVariable("endDate") Long endDate) {
+
+    return eventService.getAllPieChartEventsByDateIntervals(startDate, endDate);
   }
 }

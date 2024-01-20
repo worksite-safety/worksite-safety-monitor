@@ -17,7 +17,7 @@ public class Event {
     @Id
     private String id;
     private String cameraName;
-    private String confidencePercentage;
+    private BigDecimal confidencePercentage;
     private String eventType;
     private String isProcessed;
     private BigDecimal timePeriod;

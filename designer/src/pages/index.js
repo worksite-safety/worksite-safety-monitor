@@ -8,6 +8,7 @@ import Video from "./Video";
 import Reporting from "./Reporting";
 import UserSharedLayout from "./UserSharedLayout";
 import UserProtectedRoute from "./UserProtectedRoute";
+import ChartsContainer from "./ChartsContainer";
 
 export {
     Landing,
@@ -19,5 +20,7 @@ export {
     Video,
     UserSharedLayout,
     UserProtectedRoute,
-    Reporting
+    Reporting,
+    ChartsContainer
+
 }

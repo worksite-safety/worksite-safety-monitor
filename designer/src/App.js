@@ -13,11 +13,11 @@ import {
     Reporting,
     ChangePassword,
     ForgotPassword,
-    UserProtectedRoute
+    UserProtectedRoute,
+    ChartsContainer
 
 } from "./pages"
 import {useSelector} from "react-redux";
-import {ChartsContainer} from "./components";
 
 function App() {
 

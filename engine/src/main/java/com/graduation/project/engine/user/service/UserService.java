@@ -4,6 +4,7 @@ import com.graduation.project.engine.core.PasswordService;
 import com.graduation.project.engine.core.exception.BadRequestException;
 import com.graduation.project.engine.core.exception.EntityAlreadyExistsException;
 import com.graduation.project.engine.core.exception.EntityNotFoundException;
+import com.graduation.project.engine.core.exception.PasswordWrongException;
 import com.graduation.project.engine.core.securityConfig.JwtService;
 import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.user.model.converter.User2UserResponseDtoConverter;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -74,12 +76,20 @@ public class UserService {
 
   public AuthenticationResponseDto authenticate(LoginRequestDto request) {
 
-    authenticationManager.authenticate(
-        new UsernamePasswordAuthenticationToken(
-            request.getEmail(),
-            request.getPassword()
-        )
-    );
+    try {
+      authenticationManager.authenticate(
+          new UsernamePasswordAuthenticationToken(
+              request.getEmail(),
+              request.getPassword()
+          )
+      );
+    }catch (AuthenticationException e){
+
+      throw new PasswordWrongException(
+          errorMessageParser(USER_PASSWORD_NOT_MATCH, request.getEmail()));
+
+    }
+
     var user = userRepository.findByEmail(request.getEmail()).orElseThrow();
 
     var jwtToken = jwtService.generateToken(user);

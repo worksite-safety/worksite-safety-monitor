@@ -10,9 +10,9 @@ import java.time.ZonedDateTime;
 @AllArgsConstructor
 public class GenericExceptionSignature {
 
-    private final String message;
-    private final HttpStatus httpStatus;
-    private final ZonedDateTime timestamp;
-    private final int errorCode;
-    private final String errorMessage;
+  private final String message;
+  private final HttpStatus httpStatus;
+  private final ZonedDateTime timestamp;
+  private final int errorCode;
+  private final String errorMessage;
 }

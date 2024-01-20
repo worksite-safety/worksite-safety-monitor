@@ -8,7 +8,8 @@ import customFetch, {checkForUnauthorizedResponse} from "../util/axios";
 import {toast} from "react-toastify";
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
-const VISIBLE_FIELDS = ['eventType', 'startTime', 'timePeriod', 'cameraName'];
+const VISIBLE_FIELDS = ['eventType', 'startTime', 'confidencePercentage',
+  'timePeriod', 'cameraName'];
 
 export default function ControlledSort() {
   const [events, setEvents] = useState(
@@ -22,22 +23,42 @@ export default function ControlledSort() {
       sort: 'desc',
     },
   ]);
+  const fieldLabels = {
+    eventType: 'Event Type',
+    startTime: 'Start Time',
+    confidencePercentage: 'Confidence Percentage',
+    timePeriod: 'Time Period',
+    cameraName: 'Camera Name',
+  };
 
   const fetchCountableEventsData = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/event/all-events`);
-      const jsonData = await response.json();
+      const response = await customFetch.get('event/all-events', {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      });
+
+      const jsonData = response.data;
 
       const modifiedRows = jsonData.map((row) => ({
         ...row,
-        startTime: new Date(row.startTime).toLocaleString(),
+        startTime: new Date(row.startTime).toLocaleString('en-GB', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          second: 'numeric',
+        }),
         timePeriod: row.timePeriod === null ? '-' : row.timePeriod,
+        confidencePercentage: (row.confidencePercentage * 100).toFixed(0) + '%',
       }));
 
       setRows(modifiedRows);
     } catch (error) {
-      // Handle error
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -50,18 +71,20 @@ export default function ControlledSort() {
     today.setHours(23, 59, 59);
 
     fetchCountableEventsData(oneWeekAgo.getTime(), today.getTime());
-  }, []); // Empty dependency array means this effect runs only once, when the component mounts
+  }, []);
 
   const handleDeleteRow = async (id) => {
     try {
-      const response = await customFetch.delete(`event/delete-events/${id}`);
+      const response = await customFetch.delete(`event/delete-events/${id}`, {
+        headers: {
+          Authorization: `Bearer ${user.token}`,
+        },
+      });
 
       if (response.status === 200) {
-        // If the API call is successful, update the state to remove the deleted row
         const updatedRows = rows.filter((row) => row.id !== id);
         setRows(updatedRows);
 
-        // Fetch updated data after deleting the row
         const today = new Date();
         const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
         oneWeekAgo.setHours(0, 0, 1);
@@ -71,7 +94,6 @@ export default function ControlledSort() {
         console.error('Failed to delete the row:', response.statusText);
       }
     } catch (error) {
-      // Handle any network or unexpected errors
       console.error('Error while deleting the row:', error.message);
     }
   };
@@ -79,8 +101,12 @@ export default function ControlledSort() {
     setLoading(true);
     try {
       const response = await customFetch.post(
-          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`
-      );
+          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`, {
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+            },
+          });
+
       const jsonData = response.data;
       toast.success("Report sent successfully!");
       setEvents(jsonData);
@@ -98,7 +124,11 @@ export default function ControlledSort() {
     }
   };
   const [columns, setColumns] = React.useState([
-    ...VISIBLE_FIELDS.map((field) => ({field, headerName: field, flex: 1})),
+    ...VISIBLE_FIELDS.map((field) => ({
+      field,
+      headerName: fieldLabels[field] || field,
+      flex: 1,
+    })),
     {
       field: 'actions',
       headerName: 'Actions',
