@@ -111,11 +111,6 @@ public class UserService {
     return user2UserResponseDtoConverter.convert(userRepository.findAll());
   }
 
-  public UserResponseDto getUserById(String id) {
-    return user2UserResponseDtoConverter.convert(userRepository.findById(id).orElseThrow(
-        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, id))));
-  }
-
   private void saveUserToken(User user, String jwtToken) {
     var token = Token.builder()
         .user(user)
