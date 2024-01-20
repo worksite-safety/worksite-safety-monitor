@@ -7,6 +7,8 @@ import com.graduation.project.engine.user.model.request.RegisterRequestDto;
 import com.graduation.project.engine.user.model.request.UserUpdateRequestDto;
 import com.graduation.project.engine.user.model.response.AuthenticationResponseDto;
 import com.graduation.project.engine.user.service.UserService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -49,6 +51,7 @@ public class UserController {
   }
 
   @PutMapping("/update-user/{userId}")
+  @Operation(description = "Update User Password", summary = "Update User", security = @SecurityRequirement(name = "bearerAuth"))
   public ResponseEntity<AuthenticationResponseDto> update(@RequestBody UserUpdateRequestDto request,
       @PathVariable("userId") String userId) {
     return ResponseEntity.ok(userService.updateUser(request, userId));
