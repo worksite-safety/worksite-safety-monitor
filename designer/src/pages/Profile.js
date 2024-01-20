@@ -53,11 +53,11 @@ const Profile = () => {
         <div className="user-info">
           <h2>User Information</h2>
           <div className="user-details">
-            <h3>
-              <BadgeOutlined /> {userData.name} {userData.lastName}
+            <h3 >
+              <BadgeOutlined/> {userData.name} {userData.lastName}
             </h3>
-            <h4 className="user-email">
-              <EmailOutlined /> {userData.email}
+            <h4  style={{textTransform: 'none'}} className="user-email">
+              <EmailOutlined/> {userData.email}
             </h4>
           </div>
         </div>
