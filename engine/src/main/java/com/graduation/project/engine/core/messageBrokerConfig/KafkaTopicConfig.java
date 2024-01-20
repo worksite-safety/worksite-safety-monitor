@@ -9,13 +9,13 @@ import org.springframework.kafka.config.TopicBuilder;
 @Configuration
 public class KafkaTopicConfig {
 
-    @Value("${kafka.raw-event.topic}")
-    private String kafkaTopicName;
+  @Value("${kafka.raw-event.topic}")
+  private String kafkaTopicName;
 
-    @Bean
-    public NewTopic senderTopic(){
-        return TopicBuilder.name(kafkaTopicName).build();
-    }
+  @Bean
+  public NewTopic senderTopic() {
+    return TopicBuilder.name(kafkaTopicName).build();
+  }
 
 
 }

@@ -19,33 +19,38 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin
 public class UserController {
 
-    private final UserService userService;
+  private final UserService userService;
 
-    @PostMapping("/register")
-    public ResponseEntity<AuthenticationResponseDto> register(@Valid @RequestBody RegisterRequestDto request) {
-        return new ResponseEntity<>(userService.register(request), HttpStatus.CREATED);
-    }
-    @PostMapping("/login")
-    public ResponseEntity<AuthenticationResponseDto> login(@RequestBody LoginRequestDto request) {
-        return ResponseEntity.ok(userService.authenticate(request));
-    }
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
+  @PostMapping("/register")
+  public ResponseEntity<AuthenticationResponseDto> register(
+      @Valid @RequestBody RegisterRequestDto request) {
+    return new ResponseEntity<>(userService.register(request), HttpStatus.CREATED);
+  }
 
-        userService.forgotPassword(request.getEmail());
-        return ResponseEntity.ok("Successfully mail sent !!");
+  @PostMapping("/login")
+  public ResponseEntity<AuthenticationResponseDto> login(@RequestBody LoginRequestDto request) {
+    return ResponseEntity.ok(userService.authenticate(request));
+  }
 
-    }
-    @PostMapping("/change-password")
-    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequestDto request) {
+  @PostMapping("/forgot-password")
+  public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordRequestDto request) {
 
+    userService.forgotPassword(request.getEmail());
+    return ResponseEntity.ok("Successfully mail sent !!");
 
-        userService.changePassword(request);
-        return ResponseEntity.ok("");
+  }
 
-    }
-    @PutMapping("/update-user/{userId}")
-    public ResponseEntity<AuthenticationResponseDto> update(@RequestBody UserUpdateRequestDto request, @PathVariable("userId") String userId) {
-        return ResponseEntity.ok(userService.updateUser(request, userId));
-    }
+  @PostMapping("/change-password")
+  public ResponseEntity<?> changePassword(@RequestBody ChangePasswordRequestDto request) {
+
+    userService.changePassword(request);
+    return ResponseEntity.ok("");
+
+  }
+
+  @PutMapping("/update-user/{userId}")
+  public ResponseEntity<AuthenticationResponseDto> update(@RequestBody UserUpdateRequestDto request,
+      @PathVariable("userId") String userId) {
+    return ResponseEntity.ok(userService.updateUser(request, userId));
+  }
 }

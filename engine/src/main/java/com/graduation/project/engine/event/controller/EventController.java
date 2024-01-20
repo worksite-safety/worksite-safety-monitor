@@ -54,7 +54,8 @@ public class EventController {
 
   @PostMapping("/sendPdfEmail/{startDate}/{endDate}/{emailReceiver}")
   public ResponseEntity<String> sendPdfEmail(
-      @PathVariable Long startDate, @PathVariable Long endDate, @PathVariable String emailReceiver) {
+      @PathVariable Long startDate, @PathVariable Long endDate,
+      @PathVariable String emailReceiver) {
     List<Event> events = eventService.getAllEventsByDateIntervals(startDate, endDate);
     ByteArrayOutputStream pdfStream = eventService.generateEventsPdf(events, startDate, endDate);
 
@@ -66,6 +67,7 @@ public class EventController {
       return ResponseEntity.status(500).body("Error sending email");
     }
   }
+
   @GetMapping("/pie-chart-events/{startDate}/{endDate}")
   public List<PieChartResponseDto> getPieChartEvents(@PathVariable("startDate") Long startDate,
       @PathVariable("endDate") Long endDate) {

@@ -10,23 +10,23 @@ import java.util.stream.Collectors;
 @Component
 public class User2UserResponseDtoConverter {
 
-    public UserResponseDto convert(User user) {
-        return new UserResponseDto(user.getId(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getRole(),
-                user.isEnabled()
-        );
-    }
+  public UserResponseDto convert(User user) {
+    return new UserResponseDto(user.getId(),
+        user.getEmail(),
+        user.getFirstName(),
+        user.getLastName(),
+        user.getRole(),
+        user.isEnabled()
+    );
+  }
 
-    public List<UserResponseDto> convert(List<User> users) {
-        return users.stream().map(user -> new UserResponseDto(user.getId(),
-                user.getEmail(),
-                user.getFirstName(),
-                user.getLastName(),
-                user.getRole(),
-                user.isEnabled())).collect(Collectors.toList());
-    }
+  public List<UserResponseDto> convert(List<User> users) {
+    return users.stream().map(user -> new UserResponseDto(user.getId(),
+        user.getEmail(),
+        user.getFirstName(),
+        user.getLastName(),
+        user.getRole(),
+        user.isEnabled())).collect(Collectors.toList());
+  }
 
 }
