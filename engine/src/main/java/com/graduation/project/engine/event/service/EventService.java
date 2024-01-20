@@ -5,6 +5,7 @@ import com.graduation.project.engine.event.model.EventNameEnum;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
+import com.graduation.project.engine.event.model.response.PieChartResponseDto;
 import com.graduation.project.engine.event.repository.EventRepository;
 import com.itextpdf.text.Document;
 import com.itextpdf.text.Element;
@@ -71,6 +72,34 @@ public class EventService {
     return countableEventsList;
   }
 
+  public List<PieChartResponseDto> getAllPieChartEventsByDateIntervals(Long startDate,
+      Long endDate) {
+    List<EventNameEnum> requiredEventTypes = Arrays.asList(
+        EventNameEnum.FALL,
+        EventNameEnum.ARMS_UP,
+        EventNameEnum.FRONT_BEND
+    );
+
+    List<Event> eventList = getAllEventsByEventTypes(requiredEventTypes.stream()
+        .map(Enum::name)
+        .collect(Collectors.toList()), startDate, endDate);
+
+    Map<EventNameEnum, Long> eventTypeCountMap = eventList.stream()
+        .collect(Collectors.groupingBy(
+            event -> EventNameEnum.valueOf(event.getEventType()),
+            Collectors.counting()
+        ));
+
+    List<PieChartResponseDto> result = requiredEventTypes.stream()
+        .map(eventType -> PieChartResponseDto.builder()
+            .name(eventType.name())
+            .value(eventTypeCountMap.getOrDefault(eventType, 0L).intValue())
+            .build())
+        .collect(Collectors.toList());
+
+    return result;
+  }
+
 
   public List<PeriodicEvents> getAllPeriodicEventsByDateIntervals(Long startDate, Long endDate) {
     List<Event> eventList = getAllEventsByEventTypes(
@@ -86,13 +115,14 @@ public class EventService {
     eventRepository.deleteById(eventId);
 
   }
+
   public List<Event> getAllEventsByDateIntervals(Long startDate, Long endDate) {
     return getAllEventsByEventTypes(
         Arrays.asList(EventNameEnum.FALL.name(), EventNameEnum.ARMS_UP.name(),
-            EventNameEnum.FRONT_BEND.name(), EventNameEnum.NO_HELMET.name(), EventNameEnum.NO_JACKET.name()),
+            EventNameEnum.FRONT_BEND.name(), EventNameEnum.NO_HELMET.name(),
+            EventNameEnum.NO_JACKET.name()),
         startDate, endDate);
   }
-
 
 
   public ByteArrayOutputStream generateEventsPdf(List<Event> events, Long startDate, Long endDate) {
@@ -104,8 +134,6 @@ public class EventService {
       document.open();
       document.addTitle("Requested Event Report");
 
-
-      // Add Master Title
       Paragraph masterTitle = new Paragraph(
           "Event Report between " + getFormattedDateTime(startDate) +
               " and " + getFormattedDateTime(endDate),
@@ -117,9 +145,12 @@ public class EventService {
 
       PdfPTable table = new PdfPTable(3);
 
-      PdfPCell titleCellDate = new PdfPCell(new Phrase("Event Date"));
-      PdfPCell titleCellType = new PdfPCell(new Phrase("Event Type"));
-      PdfPCell titleCellDetails = new PdfPCell(new Phrase("Details"));
+      // Set font style for headers to bold
+      Font boldFont = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD);
+
+      PdfPCell titleCellDate = new PdfPCell(new Phrase("Event Date", boldFont));
+      PdfPCell titleCellType = new PdfPCell(new Phrase("Event Type", boldFont));
+      PdfPCell titleCellDetails = new PdfPCell(new Phrase("Details", boldFont));
 
       table.addCell(titleCellDate);
       table.addCell(titleCellType);
@@ -151,9 +182,10 @@ public class EventService {
     return byteArrayOutputStream;
   }
 
+
   private String getFormattedDateTime(Long timestamp) {
     return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault())
-        .format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        .format(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"));
   }
 
 

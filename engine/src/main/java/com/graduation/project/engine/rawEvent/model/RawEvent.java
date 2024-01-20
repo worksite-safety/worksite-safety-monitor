@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 public class RawEvent {
 
     private String cameraName;
-    private String confidencePercentage;
+    private BigDecimal confidencePercentage;
     private String eventType;
     private String isProcessed;
     private BigDecimal timePeriod;

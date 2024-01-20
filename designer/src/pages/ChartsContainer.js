@@ -1,12 +1,14 @@
 import React, {useEffect, useState} from 'react';
-import BarChart from './BarChart';
-import LineChart from './LineChartComponent';
+import BarChart from '../components/BarChart';
+import LineChart from '../components/LineChartComponent';
 import Wrapper from '../assets/wrappers/ChartsContainer';
-import DateRangePickerComp from "./DatePickerComp";
-import AreaChart from './AreaChart';
+import DateRangePickerComp from "../components/DatePickerComp";
+import AreaChart from '../components/AreaChart';
+import {PieChartComponent} from "../components";
 
 const ChartsContainer = () => {
   const [data, setData] = useState([]);
+  const [pieChartData, setPieChartData] = useState([]);
   const [periodicEventsData, setPeriodicEventsData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [countableEventsChartType, setCountableEventsChartType] = useState(
@@ -56,26 +58,22 @@ const ChartsContainer = () => {
       case 'area':
         return <AreaChart data={data} keysAndColors={keysAndColorsCountableAreaChart} yAxisTitle="Total Count Of Events"/>;
       case 'pie':
-        //return <PieChart data={data} />;
-        // eslint-disable-next-line no-fallthrough
+        return <PieChartComponent data={pieChartData} yAxisTitle="Percentage Count Of Events" />;
       default:
-        return <BarChart data={data} keysAndColors={keysAndColorsCountableBar} yAxisTitle="Total Count Of Events" />;
+        return <PieChartComponent data={pieChartData} yAxisTitle="Percentage Count Of Events" />;
     }
   };
 
   const renderPeriodicEventsChart = () => {
     switch (periodicEventsChartType) {
       case 'line':
-        return <LineChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsLineChart} yAxisTitle="Duration Of Violations (Minutes)" />;
+        return <LineChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsLineChart} yAxisTitle="Duration Of Violations (Seconds)" />;
       case 'bar':
-        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Minutes)" />;
+        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Seconds)" />;
       case 'area':
-        return <AreaChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsAreaChart} yAxisTitle="Duration Of Violations (Minutes)"/>;
-      case 'pie':
-        //return <PieChart data={periodicEventsData} />;
-        // eslint-disable-next-line no-fallthrough
+        return <AreaChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsAreaChart} yAxisTitle="Duration Of Violations (Seconds)"/>;
       default:
-        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Minutes)" />;
+        return <BarChart data={periodicEventsData} keysAndColors={keysAndColorsPeriodicEventsBar} yAxisTitle="Duration Of Violations (Seconds)" />;
     }
   };
   const fetchCountableEventsData = async (startDate, endDate) => {
@@ -104,6 +102,19 @@ const ChartsContainer = () => {
       setLoading(false);
     }
   };
+  const fetchPieChartData = async (startDate, endDate) => {
+    setLoading(true);
+    try {
+      const response = await fetch(
+          `http://localhost:8080/event/pie-chart-events/${startDate}/${endDate}`);
+      const jsonData = await response.json();
+      setPieChartData(jsonData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     const today = new Date();
     const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -113,7 +124,7 @@ const ChartsContainer = () => {
 
     fetchCountableEventsData(oneWeekAgo.getTime(), today.getTime());
     fetchPeriodicEventsData(oneWeekAgo.getTime(), today.getTime());
-
+    fetchPieChartData(oneWeekAgo.getTime(), today.getTime());
   }, []);
 
   return (
@@ -163,10 +174,6 @@ const ChartsContainer = () => {
           <button type='button'
                   onClick={() => setPeriodicEventsChartType('area')}>
             Area Chart
-          </button>
-          <button type='button'
-                  onClick={() => setPeriodicEventsChartType('pie')}>
-            Pie Chart
           </button>
         </div>
         <DateRangePickerComp onApply={fetchPeriodicEventsData}/>

@@ -9,10 +9,11 @@ import UserNavLinks from "./UserNavLinks";
 import NavLinks from "./NavLinks";
 import StatsContainer from "./StatsContainer";
 import StatItem from "./StatItem";
-import ChartsContainer from "./ChartsContainer";
 import BarChart from "./BarChart";
 import LineChart from "./LineChartComponent";
 import AreaChart from "./AreaChart";
+import PieChartComponent from "./PieChartComponent";
+
 export {
     BigSidebar,
     NavBar,
@@ -25,8 +26,8 @@ export {
     NavLinks,
     StatItem,
     StatsContainer,
-    ChartsContainer,
     BarChart,
     LineChart,
-    AreaChart
+    AreaChart,
+    PieChartComponent
 }

@@ -34,6 +34,7 @@ public class SecurityConfiguration {
       "/event/all-events",
       "/event/periodic-events/**",
       "/event/sendPdfEmail/**",
+      "/event/pie-chart-events/**",
       "/auth/register",
       "/docs/**",
       "/mail/**",

@@ -4,6 +4,7 @@ import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.CountableEvents;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
+import com.graduation.project.engine.event.model.response.PieChartResponseDto;
 import com.graduation.project.engine.event.service.EventService;
 import java.io.ByteArrayOutputStream;
 import java.util.List;
@@ -64,5 +65,11 @@ public class EventController {
       e.printStackTrace();
       return ResponseEntity.status(500).body("Error sending email");
     }
+  }
+  @GetMapping("/pie-chart-events/{startDate}/{endDate}")
+  public List<PieChartResponseDto> getPieChartEvents(@PathVariable("startDate") Long startDate,
+      @PathVariable("endDate") Long endDate) {
+
+    return eventService.getAllPieChartEventsByDateIntervals(startDate, endDate);
   }
 }
