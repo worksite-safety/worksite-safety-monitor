@@ -1,8 +1,7 @@
 import {
-  Cell, Pie, PieChart, ResponsiveContainer, LabelList
+  Cell, Pie, PieChart
 } from "recharts";
 import {PureComponent} from "react";
-import {render} from "react-dom";
 
 
 const COLORS = ['#86b6f6', '#92c7cf', '#b799ff'];
@@ -34,13 +33,15 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 export default class PieChartComponent extends PureComponent {
 
   render() {
-    const {data} = this.props;
+    const {pieChartData} = this.props;
+
+    console.log(pieChartData)
 
     return (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '35vh'}}>
           <PieChart width={400} height={400}>
             <Pie
-                data={data}
+                data={pieChartData}
                 cx="50%"
                 cy="50%"
                 label={renderCustomizedLabel}
@@ -48,7 +49,7 @@ export default class PieChartComponent extends PureComponent {
                 fill="#8884d8"
                 dataKey="value"
             >
-              {data.map((entry, index) => (
+              {pieChartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
               ))}
             </Pie>

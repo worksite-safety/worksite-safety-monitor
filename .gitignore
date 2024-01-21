@@ -243,7 +243,7 @@ docs/_build/
 target/
 
 # Jupyter Notebook
-ArtificialEnd/.ipynb_checkpoints
+AIModule/.ipynb_checkpoints
 
 # IPython
 profile_default/
@@ -354,21 +354,21 @@ pyrightconfig.json
 .history
 .ionide
 
-ArtificialEnd/data/images/
-ArtificialEnd/data/labels/
-ArtificialEnd/data/test/images/
-ArtificialEnd/data/test/labels/
-ArtificialEnd/data/train/labels/
-ArtificialEnd/data/train/images/
-ArtificialEnd/data/val/images/
-ArtificialEnd/data/val/labels/
+AIModule/data/images/
+AIModule/data/labels/
+AIModule/data/test/images/
+AIModule/data/test/labels/
+AIModule/data/train/labels/
+AIModule/data/train/images/
+AIModule/data/val/images/
+AIModule/data/val/labels/
 
 
-ArtificialEnd/aug_data/test/labels/
-ArtificialEnd/aug_data/test/images/
-ArtificialEnd/aug_data/train/labels/
-ArtificialEnd/aug_data/train/images/
-ArtificialEnd/aug_data/val/labels/
-ArtificialEnd/aug_data/val/images/
+AIModule/aug_data/test/labels/
+AIModule/aug_data/test/images/
+AIModule/aug_data/train/labels/
+AIModule/aug_data/train/images/
+AIModule/aug_data/val/labels/
+AIModule/aug_data/val/images/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,java,node

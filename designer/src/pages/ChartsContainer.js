@@ -7,7 +7,6 @@ import AreaChart from '../components/AreaChart';
 import {PieChartComponent} from "../components";
 import {useSelector} from "react-redux";
 import customFetch from "../util/axios";
-import {toast} from "react-toastify";
 
 const ChartsContainer = () => {
   const [data, setData] = useState([]);
@@ -79,10 +78,10 @@ const ChartsContainer = () => {
                           keysAndColors={keysAndColorsCountableAreaChart}
                           yAxisTitle="Total Count Of Events"/>;
       case 'pie':
-        return <PieChartComponent data={pieChartData}
+        return <PieChartComponent pieChartData={pieChartData}
                                   yAxisTitle="Percentage Count Of Events"/>;
       default:
-        return <PieChartComponent data={pieChartData}
+        return <PieChartComponent pieChartData={pieChartData}
                                   yAxisTitle="Percentage Count Of Events"/>;
     }
   };
@@ -200,7 +199,13 @@ const ChartsContainer = () => {
             Pie Chart
           </button>
         </div>
-        <DateRangePickerComp onApply={fetchCountableEventsData}/>
+        <DateRangePickerComp onApply={(startDate, endDate) => {
+          if (countableEventsChartType === 'pie') {
+            fetchPieChartData(startDate, endDate);
+          } else {
+            fetchCountableEventsData(startDate, endDate);
+          }
+        }}/>
         {loading ? (
             <p>Loading...</p>
         ) : data.length === 0 ? (
