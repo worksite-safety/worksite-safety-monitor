@@ -50,7 +50,6 @@ class RawEventServiceTestImpl {
 
   @Test
   void testListener_FallEvent() throws MessagingException {
-    // Arrange
     RawEvent fallEvent = new RawEvent();
     fallEvent.setEventType(EventNameEnum.FALL.name());
     fallEvent.setCameraName("Camera1");
@@ -69,26 +68,21 @@ class RawEventServiceTestImpl {
     when(userResponseDto2UserConverter.convert(Collections.singletonList(userResponseDto)))
         .thenReturn(Collections.singletonList(user));
 
-    // Act
     rawEventService.listener(fallEvent);
 
-    // Assert
     verify(mailService, times(1)).sendUrgentEventMail(eq(user), any(LocalDateTime.class),
         eq("Camera1"));
   }
 
   @Test
   void testListener_NoHelmetEvent_AboveThreshold() {
-    // Arrange
     RawEvent noHelmetEvent = new RawEvent();
     noHelmetEvent.setEventType(EventNameEnum.NO_HELMET.name());
     noHelmetEvent.setCameraName("Camera2");
     noHelmetEvent.setTimePeriod(BigDecimal.valueOf(fallEventThreshold + 1));
 
-    // Act
     rawEventService.listener(noHelmetEvent);
 
-    // Assert
     verify(eventRepository, times(1)).save(any(Event.class));
   }
 }
