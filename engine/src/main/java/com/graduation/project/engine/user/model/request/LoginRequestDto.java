@@ -1,5 +1,6 @@
 package com.graduation.project.engine.user.model.request;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,8 +11,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Builder
 public class LoginRequestDto {
-
+  @NotBlank(message = "Email cannot be empty")
   private String email;
-  String password;
+  @NotBlank(message = "Password cannot be empty")
+  private String password;
 
 }

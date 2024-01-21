@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { FormRow } from "../components";
 import Wrapper from "../assets/wrappers/ProfilePage";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import { updateUser } from "../features/user/userSlice";
-import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import "./profile.css";
-import { EmailOutlined, BadgeOutlined, AbcOutlined } from "@mui/icons-material";
+import { EmailOutlined, BadgeOutlined } from "@mui/icons-material";
 
 const Profile = () => {
   const { isLoading, user } = useSelector((store) => store.user);
@@ -15,6 +13,7 @@ const Profile = () => {
   const [userUpdateData, setUserUpdateDataData] = useState({
     newPassword: "",
     newPasswordConfirm: "",
+    token:user.token || "",
   });
   const [userData, setUserData] = useState({
     id: user?.id || "",
@@ -38,6 +37,7 @@ const Profile = () => {
       return;
     }
     dispatch(updateUser(userUpdateData));
+
   };
   const handleChange = (e) => {
     const name = e.target.name;

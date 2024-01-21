@@ -33,6 +33,9 @@ springdoc:
     path: /docs
 
 event:
+  image:
+    path: "${EVENT_IMAGE_PATH}"
   fall:
     threshold:
       value: 3
+

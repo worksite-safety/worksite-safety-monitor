@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import './videoStream.css'; // Import the CSS file
+import './videoStream.css';
 const VideoStream = () => {
     const [imageUrl, setImageUrl] = useState('');
     const [error, setError] = useState(false);
     const [myArray, setMyArray] = useState([]);
 
-    // Function to update the array
     const updateArray = (newItem) => {
         setMyArray((prevArray) => [...prevArray, newItem]);
     };
 
     useEffect(() => {
         const intervalId = setInterval(() => {
-            const newImageUrl = `http://localhost:5000/get_image?timestamp=${new Date().getTime()}`;
+            const newImageUrl = `http://localhost:8080/event/get_image/${new Date().getTime()}`;
             updateArray(newImageUrl);
         }, 100);
 
@@ -28,7 +27,7 @@ const VideoStream = () => {
                 setMyArray((prevArray) => prevArray.slice(1));
 
                 index = (index + 1) % myArray.length;
-            }, 100); // Update every 0.1 seconds
+            }, 100); // every 0.1 seconds
 
             return () => clearInterval(intervalId);
         }

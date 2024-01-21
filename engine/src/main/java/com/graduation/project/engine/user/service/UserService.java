@@ -75,6 +75,8 @@ public class UserService {
   }
 
   public AuthenticationResponseDto authenticate(LoginRequestDto request) {
+    var user = userRepository.findByEmail(request.getEmail()).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, request.getEmail())));
 
     try {
       authenticationManager.authenticate(
@@ -90,7 +92,6 @@ public class UserService {
 
     }
 
-    var user = userRepository.findByEmail(request.getEmail()).orElseThrow();
 
     var jwtToken = jwtService.generateToken(user);
 
@@ -183,6 +184,7 @@ public class UserService {
         .role(user.getRole())
         .lastName(user.getLastName())
         .email(user.getEmail())
+        .token(request.getToken())
         .build();
   }
 }
