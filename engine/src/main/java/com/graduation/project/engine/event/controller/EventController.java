@@ -9,8 +9,12 @@ import com.graduation.project.engine.event.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,6 +32,8 @@ public class EventController {
 
   private final EventService eventService;
   private final MailService mailService;
+  @Value("${event.image.path}")
+  private String imageFolderPath;
 
 
   @GetMapping("/countable-events/{startDate}/{endDate}")
@@ -105,5 +111,19 @@ public class EventController {
       @PathVariable("endDate") Long endDate) {
 
     return eventService.getAllPieChartEventsByDateIntervals(startDate, endDate);
+  }
+
+  @GetMapping("/get_image/{timestamp}")
+  public ResponseEntity<FileSystemResource> getImage(@PathVariable(name = "timestamp") long timestamp) {
+    String imageName = "output_image.jpg";
+    File imageFile = new File(imageFolderPath + imageName);
+
+    if (imageFile.exists()) {
+      return ResponseEntity.ok()
+          .contentType(MediaType.IMAGE_JPEG)
+          .body(new FileSystemResource(imageFile));
+    } else {
+      return ResponseEntity.notFound().build();
+    }
   }
 }

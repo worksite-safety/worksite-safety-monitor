@@ -43,7 +43,12 @@ public class EventService {
   public List<Event> getAllEvents() {
     return eventRepository.findAll();
   }
+  public void deletePeriodicEventById(String eventId) {
+    eventRepository.findById(eventId).orElseThrow(
+        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, eventId)));
+    eventRepository.deleteById(eventId);
 
+  }
   public List<CountableEvents> getAllCountableEventsByDateIntervals(Long startDate, Long endDate) {
     List<Event> eventList = getAllEventsByEventTypes(
         Arrays.asList(EventNameEnum.FALL.name(), EventNameEnum.ARMS_UP.name(),
@@ -109,12 +114,7 @@ public class EventService {
     return calculatePeriodicEvents(eventList);
   }
 
-  public void deletePeriodicEventById(String eventId) {
-    eventRepository.findById(eventId).orElseThrow(
-        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, eventId)));
-    eventRepository.deleteById(eventId);
 
-  }
 
   public List<Event> getAllEventsByDateIntervals(Long startDate, Long endDate) {
     return getAllEventsByEventTypes(
@@ -145,7 +145,6 @@ public class EventService {
 
       PdfPTable table = new PdfPTable(3);
 
-      // Set font style for headers to bold
       Font boldFont = new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD);
 
       PdfPCell titleCellDate = new PdfPCell(new Phrase("Event Date", boldFont));

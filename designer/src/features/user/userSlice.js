@@ -4,7 +4,6 @@ import customFetch from "../../util/axios";
 import {addUserToLocalStorage, getUserFromLocalStorage, removeUserFromLocalStorage} from "../../util/localStorage";
 import {
     clearStoreThunk,
-    updateUserProfilePictureThunk,
     updateUserThunk,
 } from './userThunk';
 
@@ -41,6 +40,9 @@ export const loginUser = createAsyncThunk(
             return resp.data;
         } catch (error) {
             if (error.response.status === 401) {
+                toast.error(error.response.data.message)
+            }
+            if (error.response.status === 404) {
                 toast.error(error.response.data.message)
             }
             return thunkAPI.rejectWithValue(error.response.data[0].message);

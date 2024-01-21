@@ -28,9 +28,11 @@ public class SecurityConfiguration {
       "/auth/forgot-password",
       "/auth/change-password",
       "/auth/register",
+      "/event/get_image/**",
+
       "/auth/login",
       "/docs/**",
-      "/mail/**"
+      "/mail/**",
   };
   private static final String[] ADMIN_URLS = {
       "/event/countable-events/**",
