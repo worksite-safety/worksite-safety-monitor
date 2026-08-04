@@ -66,6 +66,26 @@ kafka:
     topic: rawEvents-test
     group-id: rawEvents-test-group
 
+app:
+  # Same value production defaults to. Stated rather than left to EventService's `:UTC` fallback so
+  # that this file keeps its promise that every ${...} src/main references resolves here.
+  #
+  # EventServiceTest does NOT read this - it constructs EventService with an explicit zone per test,
+  # because the zone is a constructor argument. That is deliberate: the tests that prove the zone
+  # is honoured must state the zone they expect, not inherit it from a file.
+  timezone: UTC
+
+  frontend:
+    # MailServiceTest builds MailService directly with its own base URL per test, so this value is
+    # what the ITs and the @WebMvcTest slices see, not what the mail assertions are written against.
+    base-url: http://localhost:3000
+
+  cors:
+    # The single origin CorsPolicyTest treats as "configured"; every other origin in that class is
+    # expected to be refused. Kept to ONE entry deliberately - a list would let a test pass by
+    # matching the wrong element.
+    allowed-origins: http://localhost:3000
+
 springdoc:
   swagger-ui:
     path: /docs/swagger-ui.html

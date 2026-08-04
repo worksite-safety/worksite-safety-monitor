@@ -1,8 +1,9 @@
 package com.graduation.project.engine.email.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.graduation.project.engine.user.model.Role;
 import com.graduation.project.engine.user.model.User;
@@ -26,11 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Characterization tests for {@link MailService}.
@@ -48,10 +47,17 @@ class MailServiceTest {
 
   private static final String FROM = "worksite-noreply@example.com";
 
+  /**
+   * The frontend origin these tests configure. Still {@code http://localhost:3000}, so every
+   * assertion about the reset link below is byte-for-byte the one it was before - but it now
+   * arrives as an ARGUMENT rather than as a constant compiled into {@link MailService}, which is
+   * the whole change.
+   */
+  private static final String FRONTEND = "http://localhost:3000";
+
   @Mock
   private JavaMailSender javaMailSender;
 
-  @InjectMocks
   private MailService mailService;
 
   @Captor
@@ -59,9 +65,15 @@ class MailServiceTest {
 
   @BeforeEach
   void setUp() {
-    // fromMail is @Value-injected, not a constructor parameter, so it stays null in a unit test.
-    ReflectionTestUtils.setField(mailService, "fromMail", FROM);
-    when(javaMailSender.createMimeMessage())
+    // Built by hand rather than with @InjectMocks + ReflectionTestUtils. fromMail used to be a
+    // @Value field that stayed null in a unit test and had to be poked in reflectively; both it
+    // and the frontend origin are constructor parameters now, so the collaborators this service
+    // needs are simply passed to it and there is nothing left to reach into.
+    mailService = new MailService(javaMailSender, FROM, FRONTEND);
+    // lenient(): the constructor-validation tests below never send anything, so under the
+    // extension's default strict stubbing this shared stub would be reported as unused and fail
+    // them. It is shared because every OTHER test needs it.
+    lenient().when(javaMailSender.createMimeMessage())
         .thenReturn(new MimeMessage(Session.getInstance(new Properties())));
   }
 
@@ -113,11 +125,58 @@ class MailServiceTest {
     //     .anyMatch(part -> part.contains("http://localhost:3000/change-password?token=" + token));
     //
     // with the note "the raw AES ciphertext is dropped into the query string unescaped (note the
-    // trailing '=' padding). Both are pinned as-is." The host and port are still hard-coded and
-    // still pinned; only the escaping changed. The '=' padding is now %3D.
+    // trailing '=' padding). Both are pinned as-is." Only the escaping changed then: the '='
+    // padding became %3D.
+    //
+    // The note said "the host and port are still hard-coded and still pinned". They are not any
+    // more - they come from app.frontend.base-url, which this test supplies as FRONTEND. The
+    // expected string is unchanged because the configured value is unchanged, which is what makes
+    // this a pure externalisation: same output, different source.
     assertThat(textPartsOf(capturedMessage()))
         .anyMatch(part -> part.contains(
-            "http://localhost:3000/change-password?token=MZQJDqc5XqIXLMzs1s0xH5vuYocPc2b4HixySp4mBJQ%3D"));
+            FRONTEND + "/change-password?token=MZQJDqc5XqIXLMzs1s0xH5vuYocPc2b4HixySp4mBJQ%3D"));
+  }
+
+  @Test
+  @DisplayName("forgot-password mail: the link is built from the CONFIGURED origin, not localhost")
+  void forgotPasswordMail_linkUsesTheConfiguredFrontendOrigin() throws Exception {
+    // The test that says the value is genuinely configuration. Every other assertion in this class
+    // uses http://localhost:3000, which is exactly the string that used to be hard-coded - so on
+    // its own the suite could not tell a bound property from the old constant.
+    MailService deployed =
+        new MailService(javaMailSender, FROM, "https://safety.example.com");
+
+    deployed.sendForgotPasswordEmail(user("Ada", "Lovelace", "ada@example.com"), "tok");
+
+    List<String> parts = textPartsOf(capturedMessage());
+    assertThat(parts).anyMatch(
+        part -> part.contains("https://safety.example.com/change-password?token=tok"));
+    assertThat(parts).noneMatch(part -> part.contains("localhost"));
+  }
+
+  @Test
+  @DisplayName("forgot-password mail: a trailing slash on the base URL does not double up")
+  void forgotPasswordMail_trailingSlashOnTheBaseUrlIsNormalised() throws Exception {
+    // "https://safety.example.com/" is the form somebody will inevitably put in the environment
+    // variable, and "…com//change-password" is a link some proxies and routers will not serve.
+    MailService deployed =
+        new MailService(javaMailSender, FROM, "https://safety.example.com/");
+
+    deployed.sendForgotPasswordEmail(user("Ada", "Lovelace", "ada@example.com"), "tok");
+
+    assertThat(textPartsOf(capturedMessage()))
+        .anyMatch(part -> part.contains("https://safety.example.com/change-password?token=tok"))
+        .noneMatch(part -> part.contains("//change-password"));
+  }
+
+  @Test
+  @DisplayName("a blank frontend origin stops the service being built, rather than sending dead links")
+  void blankFrontendBaseUrlIsRejectedAtConstruction() {
+    // Startup, not send-time. A dead reset link fails in the recipient's browser, hours later and
+    // somewhere the server cannot see; there is no error to catch and nothing to log.
+    assertThatThrownBy(() -> new MailService(javaMailSender, FROM, "  "))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.frontend.base-url is empty");
   }
 
   @Test
@@ -213,7 +272,7 @@ class MailServiceTest {
    */
   private static String tokenQueryParameterOf(MimeMessage message) throws Exception {
     Matcher matcher = Pattern
-        .compile("href='http://localhost:3000/change-password\\?token=([^']*)'")
+        .compile("href='" + Pattern.quote(FRONTEND) + "/change-password\\?token=([^']*)'")
         .matcher(String.join("\n", textPartsOf(message)));
     assertThat(matcher.find()).as("the mail must contain a reset link").isTrue();
     return matcher.group(1);

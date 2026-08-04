@@ -31,6 +31,7 @@ import com.graduation.project.engine.user.service.UserService;
 import jakarta.mail.MessagingException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -109,13 +110,18 @@ class RawEventServiceTest {
 
   @BeforeEach
   void setUp() {
-    // Both are @Value-injected fields rather than constructor parameters, so they stay 0/null in
-    // a pure unit test. SECONDS is the production default: it describes the detector that is in
-    // the field today, so this is the configuration the engine actually runs with until the
-    // rewritten detector ships.
+    // All three are @Value-injected fields rather than constructor parameters, so they stay
+    // 0/null in a pure unit test. SECONDS is the production default: it describes the detector
+    // that is in the field today, so this is the configuration the engine actually runs with
+    // until the rewritten detector ships.
     ReflectionTestUtils.setField(rawEventService, "minPeriodicDurationMs",
         MIN_PERIODIC_DURATION_MS);
     ReflectionTestUtils.setField(rawEventService, "periodicInputUnit", PeriodicInputUnit.SECONDS);
+    // The zone the fall alert's "Detection Time" is rendered in, matching app.timezone's default.
+    // Left null this is not a silent wrong answer but an NPE inside the mail loop, which the
+    // per-recipient catch would then swallow as a failed send - so every fall alert would quietly
+    // stop going out. Set explicitly for that reason rather than for tidiness.
+    ReflectionTestUtils.setField(rawEventService, "alertZone", ZoneOffset.UTC);
 
     logs = new ListAppender<>();
     logs.start();

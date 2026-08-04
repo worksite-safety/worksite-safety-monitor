@@ -31,11 +31,11 @@ import java.util.TimeZone;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -46,17 +46,28 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * behaviours pinned here are arguably wrong (see the {@code @DisplayName}s that say so); they are
  * recorded, not fixed.
  *
- * <p><b>Time zone discipline.</b> {@code getAllCountableEventsByDateIntervals} buckets days with
- * {@link java.time.ZoneId#systemDefault()} while {@code calculatePeriodicEvents} buckets with
- * integer division by 86_400_000 (i.e. hard-wired UTC). Every day-bucketing assertion below
- * therefore pins the JVM default zone explicitly in {@link #setUp()} and restores the real one in
- * {@link #tearDown()}, so nothing here silently depends on the machine's zone.
+ * <p><b>Time zone discipline.</b> {@link EventService} now takes ONE zone -
+ * {@code app.timezone}, default UTC - as a constructor argument, and every day-bucketing site uses
+ * it: the countable chart, the periodic chart and the timestamps in the PDF report. Tests that care
+ * about the zone therefore state it, by building the service with {@link #eventServiceIn(String)},
+ * rather than by manipulating the JVM default.
+ *
+ * <p>The JVM default is still pinned in {@link #setUp()} and restored in {@link #tearDown()}, but
+ * only as a tripwire: no production path reads it any more, and
+ * {@link UnderAnExtremeJvmDefaultZone} is the test that proves it by moving the JVM 14 hours and
+ * demanding identical output.
  */
 @ExtendWith(MockitoExtension.class)
 class EventServiceTest {
 
   private static final Long START = 1_600_000_000_000L;
   private static final Long END = 1_800_000_000_000L;
+
+  /**
+   * 2023-11-13T20:00Z. Chosen because it lands on a DIFFERENT calendar day either side of the
+   * boundary this suite cares about: 13.11 in UTC, 14.11 in Pacific/Kiritimati (UTC+14).
+   */
+  private static final long ACROSS_THE_DATE_LINE = utc(2023, 11, 13, 20, 0);
 
   private static final List<String> COUNTABLE_TYPES = Arrays.asList("FALL", "ARMS_UP",
       "FRONT_BEND");
@@ -67,7 +78,13 @@ class EventServiceTest {
   @Mock
   private EventRepository eventRepository;
 
-  @InjectMocks
+  /**
+   * Built by hand rather than with {@code @InjectMocks}, because {@link EventService} now takes the
+   * reporting zone as a constructor argument. {@code @InjectMocks} would pick the same constructor
+   * and pass {@code null} for the {@code String}, which the constructor rejects outright - and if
+   * it did not, every test would silently run against whatever zone {@code null} degraded to. The
+   * zone being an ARGUMENT is the fix; making it explicit here is the point, not an inconvenience.
+   */
   private EventService eventService;
 
   @Captor
@@ -78,10 +95,18 @@ class EventServiceTest {
   @BeforeEach
   void setUp() {
     originalTimeZone = TimeZone.getDefault();
-    // Default for most tests: UTC, so the system-default-zone path and the hard-wired-UTC path
-    // agree and each test measures only what it means to measure. The two tests that exist to
-    // pin the disagreement override this locally.
+    // The JVM default is still pinned, but for the OPPOSITE reason it used to be. It used to be
+    // load-bearing: two of the three day-bucketing sites read it, so leaving it to the machine
+    // made the assertions below machine-dependent. Now nothing in EventService reads it, and it is
+    // pinned only so that a REGRESSION - a systemDefault() creeping back in - cannot pass here by
+    // accident on a UTC host. UnderAnExtremeJvmDefaultZone is the test that actively hunts for it.
     TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+    eventService = eventServiceIn("UTC");
+  }
+
+  /** An {@link EventService} configured with {@code app.timezone} = {@code zoneId}. */
+  private EventService eventServiceIn(String zoneId) {
+    return new EventService(eventRepository, zoneId);
   }
 
   @AfterEach
@@ -177,13 +202,23 @@ class EventServiceTest {
   }
 
   @Test
-  @DisplayName("countable: buckets the day in the JVM DEFAULT zone (not UTC)")
-  void countable_bucketsDayInSystemDefaultZone() {
-    // 2023-11-14T02:00Z is still 2023-11-13 21:00 in New York (EST, UTC-5).
-    TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+  @DisplayName("countable: buckets the day in the CONFIGURED zone (app.timezone), not the JVM's")
+  void countable_bucketsDayInTheConfiguredZone() {
+    // RE-PINNED. This was countable_bucketsDayInSystemDefaultZone, and it set the JVM default to
+    // America/New_York to demonstrate that the JVM's zone decided the bucket:
+    //
+    //     TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+    //     stubCountable(countable(FALL, utc(2023, 11, 14, 2, 0)));
+    //     ... isEqualTo("13.11.2023");
+    //
+    // The expected VALUE is unchanged - 2023-11-14T02:00Z is still 2023-11-13 21:00 in New York
+    // (EST, UTC-5) - but the reason it holds has moved from "the JVM happens to be set to New York"
+    // to "the service was configured with New York". The JVM default is left at the UTC that
+    // setUp() pins, so if the answer still depended on it this test would now read 14.11.2023.
+    EventService inNewYork = eventServiceIn("America/New_York");
     stubCountable(countable(EventNameEnum.FALL, utc(2023, 11, 14, 2, 0)));
 
-    List<CountableEvents> result = eventService.getAllCountableEventsByDateIntervals(START, END);
+    List<CountableEvents> result = inNewYork.getAllCountableEventsByDateIntervals(START, END);
 
     assertThat(result).singleElement()
         .extracting(CountableEvents::getDate)
@@ -384,9 +419,24 @@ class EventServiceTest {
   }
 
   @Test
-  @DisplayName("periodic: buckets the day in HARD-WIRED UTC, diverging from the countable endpoint")
-  void periodic_bucketsDayInUtcAndDivergesFromCountable() {
-    TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+  @DisplayName("periodic: buckets the day in the CONFIGURED zone, AGREEING with the countable endpoint")
+  void periodic_bucketsDayInTheConfiguredZoneAndAgreesWithCountable() {
+    // INVERTED - this is the defect test, and it was written to be inverted. It used to be
+    // periodic_bucketsDayInUtcAndDivergesFromCountable and it ASSERTED THE DISAGREEMENT:
+    //
+    //     TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+    //     ...
+    //     assertThat(periodicResult)...isEqualTo("14.11.2023");   // hard-wired UTC
+    //     assertThat(countableResult)...isEqualTo("13.11.2023");  // JVM default zone
+    //     // "Same instant, two different days: the chart families disagree. A later slice
+    //     //  unifies them."
+    //
+    // This is that slice. The same instant now produces ONE day from both families, and the day is
+    // the configured zone's - 13.11 in New York - rather than one answer from the JVM's zone and a
+    // different one from a hard-wired constant. The two assertions are kept side by side, and
+    // compared to each other, because "they agree" is the property that was broken; asserting
+    // 13.11 twice in isolation would not say that.
+    EventService inNewYork = eventServiceIn("America/New_York");
     long instant = utc(2023, 11, 14, 2, 0); // = 2023-11-13 21:00 in New York
 
     when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
@@ -397,15 +447,36 @@ class EventServiceTest {
         .thenReturn(List.of(countable(EventNameEnum.FALL, instant)));
 
     List<PeriodicEvents> periodicResult =
-        eventService.getAllPeriodicEventsByDateIntervals(START, END);
+        inNewYork.getAllPeriodicEventsByDateIntervals(START, END);
     List<CountableEvents> countableResult =
-        eventService.getAllCountableEventsByDateIntervals(START, END);
+        inNewYork.getAllCountableEventsByDateIntervals(START, END);
 
-    // Same instant, two different days: the chart families disagree. A later slice unifies them.
     assertThat(periodicResult).singleElement()
-        .extracting(PeriodicEvents::getDate).isEqualTo("14.11.2023");
+        .extracting(PeriodicEvents::getDate).isEqualTo("13.11.2023");
     assertThat(countableResult).singleElement()
         .extracting(CountableEvents::getDate).isEqualTo("13.11.2023");
+    assertThat(periodicResult.get(0).getDate()).isEqualTo(countableResult.get(0).getDate());
+  }
+
+  @Test
+  @DisplayName("app.timezone: an unusable value stops the service being built at all")
+  void invalidConfiguredZoneIsRejectedAtConstruction() {
+    // Startup, not first-request. The same rule JwtService and PasswordService follow: a
+    // configuration value that cannot be honoured must be loud while somebody is deploying, not
+    // silent until an operator opens a chart.
+    assertThatThrownBy(() -> eventServiceIn("Europe/Istanbol"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.timezone is not a valid IANA zone id");
+
+    assertThatThrownBy(() -> eventServiceIn("  "))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.timezone is empty");
+
+    // "EST" is the trap worth naming: TimeZone.getTimeZone("EST") would have accepted it, and
+    // TimeZone.getTimeZone("Nonsense") silently returns GMT - a misconfiguration that looks like
+    // it worked. ZoneId.of refuses both, so it cannot degrade quietly to UTC.
+    assertThatThrownBy(() -> eventServiceIn("Nonsense/Zone"))
+        .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -426,6 +497,124 @@ class EventServiceTest {
     verify(eventRepository).findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
         eventTypesCaptor.capture(), eq(START), eq(END));
     assertThat(eventTypesCaptor.getValue()).containsExactly("NO_HELMET", "NO_JACKET");
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // app.timezone - ONE configured zone for every day-bucketing site
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The proof that {@link java.time.ZoneId#systemDefault()} is GONE, rather than merely agreeing
+   * with UTC by coincidence.
+   *
+   * <p>Every other test in this class runs with the JVM default pinned to UTC, which is exactly the
+   * condition under which a {@code systemDefault()} bug is INVISIBLE: the buggy path and the correct
+   * path return the same answer, so an assertion cannot tell them apart. That is why this defect
+   * survived - it reproduces on the developers' UTC+3 machines and vanishes on a UTC CI runner.
+   *
+   * <p>So these tests do the opposite: they set the JVM default to {@code Pacific/Kiritimati}
+   * (UTC+14, the furthest-forward zone there is) and require the results to be IDENTICAL to a run
+   * under a UTC default. Under UTC+14 every instant in the last 14 hours of a UTC day reads as the
+   * following calendar day, so any surviving {@code systemDefault()} read shifts a date and the
+   * assertion fails. Nothing here asserts "the code is correct"; it asserts "the JVM default zone
+   * has no influence", which is the property that actually had to change.
+   *
+   * <p>Deliberately NOT solved with {@code -Duser.timezone=UTC} in Surefire. That would force the
+   * whole suite into the one zone where the bug cannot be observed - it would hide this defect
+   * rather than prove it fixed.
+   */
+  @Nested
+  @DisplayName("day bucketing under an extreme JVM default zone (Pacific/Kiritimati, UTC+14)")
+  class UnderAnExtremeJvmDefaultZone {
+
+    @BeforeEach
+    void jvmDefaultZoneIsUtcPlus14() {
+      // Runs AFTER the outer setUp(), so it overrides the UTC default the rest of the class uses.
+      TimeZone.setDefault(TimeZone.getTimeZone("Pacific/Kiritimati"));
+    }
+
+    @AfterEach
+    void restoreTheRealJvmDefaultZone() {
+      // The outer tearDown() also restores it; doing it here too keeps this class honest on its
+      // own terms rather than relying on the enclosing class to clean up after it.
+      TimeZone.setDefault(originalTimeZone);
+    }
+
+    @Test
+    @DisplayName("all three sites return EXACTLY what the same call returns under a UTC default")
+    void allDayBucketingIsIdenticalToAUtcDefaultRun() {
+      stubEveryFamily(ACROSS_THE_DATE_LINE);
+
+      List<String> underUtcPlus14 = dayBucketingSnapshot();
+      TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+      List<String> underUtc = dayBucketingSnapshot();
+
+      // The headline assertion: same inputs, two JVM default zones 14 hours apart, one answer.
+      // countable-events, periodic-events and the PDF report are all in the snapshot, so this
+      // fails if ANY of the three still reads the JVM default.
+      assertThat(underUtcPlus14)
+          .as("the JVM default zone must not reach any day-bucketing site")
+          .isEqualTo(underUtc);
+    }
+
+    @Test
+    @DisplayName("countable and periodic put the same instant on the same day - the configured one")
+    void countableAndPeriodicAgreeOnTheDay() {
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(COUNTABLE_TYPES), eq(START), eq(END)))
+          .thenReturn(List.of(countable(EventNameEnum.FALL, ACROSS_THE_DATE_LINE)));
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(PERIODIC_TYPES), eq(START), eq(END)))
+          .thenReturn(List.of(periodic(EventNameEnum.NO_HELMET, ACROSS_THE_DATE_LINE, "9000")));
+
+      String countableDay = eventService.getAllCountableEventsByDateIntervals(START, END)
+          .get(0).getDate();
+      String periodicDay = eventService.getAllPeriodicEventsByDateIntervals(START, END)
+          .get(0).getDate();
+
+      // 13.11, not 14.11: the configured zone is UTC, and the JVM's UTC+14 default is irrelevant.
+      assertThat(countableDay).isEqualTo("13.11.2023");
+      assertThat(periodicDay).isEqualTo(countableDay);
+    }
+
+    @Test
+    @DisplayName("the PDF report stamps the same day the charts bucket into")
+    void reportTimestampAgreesWithTheCharts() {
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(ALL_TYPES), eq(START), eq(END)))
+          .thenReturn(List.of(countable(EventNameEnum.FALL, ACROSS_THE_DATE_LINE)));
+
+      String text = pdfTextOf(eventService.generateEventsPdf(
+          eventService.getAllEventsByDateIntervals(START, END), START, END));
+
+      // The report is emailed alongside the charts it summarises. A report that dates the same
+      // event a day later than the chart beside it is worse than no report.
+      assertThat(text).contains("13-11-2023 20:00:00");
+    }
+
+    private void stubEveryFamily(long instant) {
+      Event fall = countable(EventNameEnum.FALL, instant);
+      Event noHelmet = periodic(EventNameEnum.NO_HELMET, instant, "9000");
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(COUNTABLE_TYPES), eq(START), eq(END))).thenReturn(List.of(fall));
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(PERIODIC_TYPES), eq(START), eq(END))).thenReturn(List.of(noHelmet));
+      when(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+          eq(ALL_TYPES), eq(START), eq(END))).thenReturn(List.of(fall, noHelmet));
+    }
+
+    /**
+     * Every day-bucketing answer the service can give, as comparable strings: the countable
+     * chart's day, the periodic chart's day, and the full rendered text of the PDF report (which
+     * carries both the range in its title and a timestamp per row).
+     */
+    private List<String> dayBucketingSnapshot() {
+      return List.of(
+          eventService.getAllCountableEventsByDateIntervals(START, END).get(0).getDate(),
+          eventService.getAllPeriodicEventsByDateIntervals(START, END).get(0).getDate(),
+          pdfTextOf(eventService.generateEventsPdf(
+              eventService.getAllEventsByDateIntervals(START, END), START, END)));
+    }
   }
 
   // ---------------------------------------------------------------------------------------------

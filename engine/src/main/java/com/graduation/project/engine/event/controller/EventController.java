@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,10 +26,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+// No @CrossOrigin. It used to sit here with no attributes, which means allowedOrigins = "*" - any
+// site on the internet could call this API from a browser and read the response, including
+// /get_image/**, which is public. The policy now lives in exactly one place, driven by
+// app.cors.allowed-origins: see SecurityConfiguration#corsConfigurationSource.
 @RestController
 @RequestMapping("/event")
 @RequiredArgsConstructor
-@CrossOrigin
 public class EventController {
 
   private static final Logger logger = LoggerFactory.getLogger(EventController.class);

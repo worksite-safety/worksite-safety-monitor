@@ -7,7 +7,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -16,13 +15,45 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 public class MailService {
 
   private final JavaMailSender javaMailSender;
 
-  @Value("${spring.mail.username}")
-  private String fromMail;
+  private final String fromMail;
+
+  /**
+   * Origin of the React app - {@code app.frontend.base-url}, no path, no trailing slash.
+   *
+   * <p>This was the literal {@code "http://localhost:3000/change-password"} spelled into
+   * {@link #sendForgotPasswordEmail}. A reset link is the one part of this system that is read
+   * OUTSIDE it, in somebody's mail client, on a machine that is not the server - so "localhost"
+   * names the recipient's own computer, where nothing is listening. Every reset mail from any
+   * deployed instance was therefore delivered successfully and completely useless, and the server
+   * had no way to notice: the address is only resolved by the browser, long after the send
+   * succeeded.
+   *
+   * <p>A constructor argument rather than a {@code @Value} field for the same reason the secrets
+   * are: the value is validated once, at startup, so a blank or malformed origin stops the context
+   * instead of producing dead links until somebody reports one.
+   */
+  private final String frontendBaseUrl;
+
+  public MailService(JavaMailSender javaMailSender,
+      @Value("${spring.mail.username}") String fromMail,
+      @Value("${app.frontend.base-url}") String frontendBaseUrl) {
+    this.javaMailSender = javaMailSender;
+    this.fromMail = fromMail;
+
+    if (frontendBaseUrl == null || frontendBaseUrl.isBlank()) {
+      throw new IllegalStateException(
+          "app.frontend.base-url is empty. Set it to the origin the frontend is served from, "
+              + "e.g. https://safety.example.com.");
+    }
+    // Normalised here, once, so callers can concatenate a path beginning with '/' without any of
+    // them having to know whether the configured value ended in one. "…example.com/" and
+    // "…example.com" must not produce links that differ by a double slash.
+    this.frontendBaseUrl = frontendBaseUrl.trim().replaceAll("/+$", "");
+  }
 
   public void sendUrgentEventMail(User user, LocalDateTime detectionTimestamp,
       String cameraName) throws MessagingException {
@@ -95,7 +126,7 @@ public class MailService {
     // URLEncoder, not UriUtils.encodeQueryParam: '+' is an RFC 3986 sub-delimiter and therefore
     // *legal* in a query, so the RFC-correct encoder leaves it exactly as it is - which is the
     // one character that had to change.
-    String resetPasswordLink = "http://localhost:3000/change-password?token="
+    String resetPasswordLink = frontendBaseUrl + "/change-password?token="
         + URLEncoder.encode(hashedEmailUrl, StandardCharsets.UTF_8);
 
     String htmlContent = "<html>"

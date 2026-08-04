@@ -11,6 +11,7 @@ import com.graduation.project.engine.user.model.converter.UserResponseDto2UserCo
 import com.graduation.project.engine.user.service.UserService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -59,6 +60,18 @@ public class RawEventService {
   @Value("${event.periodic.input-unit:SECONDS}")
   private PeriodicInputUnit periodicInputUnit;
 
+  /**
+   * The zone the fall-alert email's "Detection Time" is rendered in.
+   *
+   * <p>The same {@code app.timezone} the charts and the PDF report read. It is here because this
+   * line used to be {@code LocalDateTime.now()} with no zone, which silently means the JVM
+   * default: on any host not set to {@code app.timezone}, the alert email naming an incident and
+   * the chart counting it could disagree about which day it happened on. That is the same defect
+   * the three chart sites had, in the one surface a person reads first and cannot cross-check.
+   */
+  @Value("${app.timezone:UTC}")
+  private ZoneId alertZone;
+
   Logger logger = LoggerFactory.getLogger(RawEventService.class);
 
   // @SneakyThrows removed with the mail try/catch below: nothing in this method throws a checked
@@ -100,7 +113,7 @@ public class RawEventService {
       for (User user : users) {
         logger.info("Sending fall notification to: {}", user.getEmail());
         try {
-          mailService.sendUrgentEventMail(user, LocalDateTime.now(), data.getCameraName());
+          mailService.sendUrgentEventMail(user, LocalDateTime.now(alertZone), data.getCameraName());
         } catch (Exception e) {
           // Isolated per recipient. Previously there was no try/catch at all, so the FIRST
           // unreachable mailbox ended the loop and every later user silently got nothing - and

@@ -15,10 +15,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+// No @CrossOrigin - see the note on EventController and
+// SecurityConfiguration#corsConfigurationSource. It mattered more here than anywhere: a bare
+// @CrossOrigin on the /auth endpoints let any origin drive login, registration and password reset.
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@CrossOrigin
 public class UserController {
 
   private final UserService userService;

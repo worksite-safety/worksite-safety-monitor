@@ -11,7 +11,20 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
+    # Both halves of the SMTP credential are required at startup - no fallback, same rule as
+    # jwt.secret below. username is not merely an account name: MailService uses it as the From
+    # address of every fall alert and every password-reset mail, so a default would put a wrong,
+    # committed identity on outbound mail rather than failing.
     username: ${MAIL_USERNAME}
+    # NO DEFAULT, DELIBERATELY.
+    #
+    # REVOKE THE OLD ONE - it is not enough that it is gone from here. A Gmail app password was
+    # committed in this field. It has been removed from the working tree and rewritten out of the
+    # history, but it was public for as long as it was pushed: it may sit in forks, in clones, in
+    # CI caches and in anything that mirrored this repository, none of which a history rewrite can
+    # reach. Until the password is revoked in the Google account that issued it, that account can
+    # still be used to send mail as this application. Revoke first, then issue a new app password
+    # and set it here through the environment.
     password: ${MAIL_PASSWORD}
 
 
@@ -69,6 +82,49 @@ password-reset:
   # anyone who can read the history.
   aes-key: ${PASSWORD_RESET_AES_KEY}
 
+app:
+  # The zone in which "which day did this happen on" is answered, for EVERY surface that answers
+  # it: /event/countable-events, /event/periodic-events and the timestamps in the emailed PDF
+  # report. Read once by EventService's constructor.
+  #
+  # It exists because those three used to disagree. Two read ZoneId.systemDefault() and one divided
+  # the epoch by 86_400_000 (hard-wired UTC), so on any host not set to UTC a single event near
+  # midnight was counted on one day by one chart and on the adjacent day by the chart beside it,
+  # with nothing in the output to say so.
+  #
+  # UTC by default because it is the same everywhere and matches what the periodic chart already
+  # did, so existing stored data buckets exactly as it did before. Set it to the worksite's own zone
+  # (e.g. Europe/Istanbul) to get local days - all three surfaces move together, which is the point.
+  #
+  # Must be an IANA zone id. ZoneId.of rejects the three-letter abbreviations that
+  # TimeZone.getTimeZone would silently map to GMT, so a typo fails startup rather than quietly
+  # behaving as UTC.
+  timezone: ${APP_TIMEZONE:UTC}
+
+  frontend:
+    # Origin of the React app, used by MailService to build the password-reset link.
+    #
+    # This was the literal "http://localhost:3000/change-password" inside MailService. Every reset
+    # mail a deployed instance sent pointed the recipient at their OWN machine, where nothing was
+    # listening. The mail was accepted, the link was dead, and the server had no way to know - the
+    # only symptom is a user who says the reset never worked.
+    #
+    # No trailing slash needed; MailService strips one if present.
+    base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+
+  cors:
+    # Origins allowed to call this API from a browser. Comma-separated; bound into the
+    # CorsConfigurationSource bean in SecurityConfiguration.
+    #
+    # This replaces a bare @CrossOrigin on EventController and UserController. With no attributes
+    # that annotation means allowedOrigins = "*", so ANY site could make cross-origin calls to this
+    # API and read the responses - including /event/get_image/**, which is public and serves the
+    # worksite camera frame.
+    #
+    # MUST NOT be "*". SecurityConfiguration rejects a wildcard at startup rather than accepting a
+    # value that reinstates the defect; set the deployed frontend's exact origin(s) instead.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
 springdoc:
   swagger-ui:
     path: /docs/swagger-ui.html
@@ -77,7 +133,20 @@ springdoc:
 
 event:
   image:
-    path: "${EVENT_IMAGE_PATH}"
+    # Directory holding output_image.jpg, the single frame the detector overwrites and
+    # EventController.getImage serves as the "video stream".
+    #
+    # The default is RELATIVE and resolves against the engine's working directory, so a fresh
+    # checkout runs with no configuration at all. It used to be an absolute path into a former
+    # developer's OneDrive folder, which meant the preview was broken on every machine but one -
+    # and broken silently, as a 404 from a public endpoint with nothing in a log to explain it.
+    # Not a secret, so requiring the variable would only trade a broken preview for a failed boot.
+    #
+    # The default is "../detector/" because the documented run command is ./mvnw spring-boot:run
+    # FROM engine/, so the process working directory is engine/ and detector/ is its sibling.
+    # Launching from the repository root instead needs EVENT_IMAGE_PATH set explicitly; compose
+    # sets it either way rather than relying on where the process happened to start.
+    path: "${EVENT_IMAGE_PATH:../detector/}"
   periodic:
     # The unit the DETECTOR currently sends timePeriod in - a fact about the deployed producer,
     # not a preference. The engine normalises to milliseconds on ingest, so this is the single

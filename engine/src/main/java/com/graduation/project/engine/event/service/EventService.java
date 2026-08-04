@@ -19,6 +19,7 @@ import com.itextpdf.text.pdf.PdfWriter;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,7 +30,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -38,7 +39,6 @@ import static com.graduation.project.engine.core.exception.constant.ErrorConstan
 import static com.graduation.project.engine.core.exception.constant.ErrorConstant.errorMessageParser;
 
 @Service
-@RequiredArgsConstructor
 public class EventService {
 
   /**
@@ -48,6 +48,67 @@ public class EventService {
   private static final BigDecimal MILLIS_PER_SECOND = BigDecimal.valueOf(1000);
 
   private final EventRepository eventRepository;
+
+  /**
+   * The one zone in which this service decides what "day" an instant belongs to.
+   *
+   * <h2>What this replaced</h2>
+   *
+   * <p>Three sites, two different answers:
+   *
+   * <ul>
+   *   <li>{@code getAllCountableEventsByDateIntervals} bucketed with {@code ZoneId.systemDefault()}
+   *       - the JVM's zone, i.e. whatever the deployment host happens to be set to;</li>
+   *   <li>{@code calculatePeriodicEvents} bucketed with
+   *       {@code LocalDate.ofEpochDay(startTime / 86_400_000)} - integer division, i.e. hard-wired
+   *       UTC, with no way to configure it;</li>
+   *   <li>{@code getFormattedDateTime}, which stamps the emailed PDF report, used
+   *       {@code systemDefault()} again.</li>
+   * </ul>
+   *
+   * <p>So on any host not set to UTC, ONE event near midnight was counted on one day by the
+   * countable chart and on the day before or after by the periodic chart - the two charts sit side
+   * by side on the same dashboard, over the same range - while the PDF report emailed alongside
+   * them agreed with neither reliably. Nothing failed; the numbers were simply attributed to
+   * different days.
+   *
+   * <p>This survived because it is invisible in exactly the place it is usually looked for: on a
+   * UTC CI runner all three agree and every assertion passes. It reproduces on the developers'
+   * UTC+3 machines. {@code EventServiceTest.UnderAnExtremeJvmDefaultZone} is what closes that gap -
+   * it forces the JVM default to UTC+14 and requires the answers to be unchanged.
+   *
+   * <h2>Why configurable, and why UTC by default</h2>
+   *
+   * <p>"Which day did this happen on" is a question about the worksite, not about the server, so
+   * the answer has to be stated rather than inherited from whatever host the process lands on -
+   * {@code systemDefault()} makes the same data produce different charts after a migration to a
+   * differently-configured machine, with nothing in the output to say so. UTC is the default
+   * because it is the one choice that is the same everywhere and matches what the periodic chart
+   * already did, so an existing deployment's stored data keeps bucketing exactly as it did.
+   * A site that wants local days sets {@code app.timezone} to its own zone and gets all three
+   * surfaces moved together.
+   */
+  private final ZoneId reportingZone;
+
+  public EventService(EventRepository eventRepository,
+      @Value("${app.timezone:UTC}") String reportingZoneId) {
+    this.eventRepository = eventRepository;
+
+    if (reportingZoneId == null || reportingZoneId.isBlank()) {
+      throw new IllegalStateException(
+          "app.timezone is empty. Set it to an IANA zone id such as UTC or Europe/Istanbul.");
+    }
+    try {
+      // Resolved once, at construction, so a typo ("Europe/Istanbol") stops the context from
+      // starting instead of throwing on the first chart request. ZoneId.of also REJECTS the
+      // three-letter abbreviations TimeZone.getTimeZone silently maps to GMT, so a misconfigured
+      // zone cannot quietly degrade to UTC and look like it worked.
+      this.reportingZone = ZoneId.of(reportingZoneId.trim());
+    } catch (DateTimeException e) {
+      throw new IllegalStateException(
+          "app.timezone is not a valid IANA zone id: '" + reportingZoneId + "'", e);
+    }
+  }
 
   /**
    * Every stored event, as {@link EventResponseDto} - durations in SECONDS.
@@ -102,7 +163,7 @@ public class EventService {
     Map<LocalDate, Map<String, Long>> groupedEvents = eventList.stream()
         .collect(Collectors.groupingBy(
             event -> LocalDateTime.ofInstant(Instant.ofEpochMilli(event.getStartTime()),
-                ZoneId.systemDefault()).toLocalDate(),
+                reportingZone).toLocalDate(),
             Collectors.groupingBy(Event::getEventType, Collectors.counting())
         ));
 
@@ -252,7 +313,7 @@ public class EventService {
 
 
   private String getFormattedDateTime(Long timestamp) {
-    return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneId.systemDefault())
+    return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), reportingZone)
         .format(DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss"));
   }
 
@@ -268,7 +329,12 @@ public class EventService {
     List<PeriodicEvents> periodicEventsList = new ArrayList<>();
 
     for (Event event : eventList) {
-      LocalDate eventDate = LocalDate.ofEpochDay(event.getStartTime() / (24 * 60 * 60 * 1000));
+      // Was LocalDate.ofEpochDay(startTime / (24 * 60 * 60 * 1000)) - hard-wired UTC, and not
+      // merely because of the constant: integer division truncates TOWARDS ZERO, so any timestamp
+      // before 1970 also landed a day late. Going through Instant/ZoneId fixes both and is the
+      // same expression the countable endpoint uses, which is the point - one zone, one answer.
+      LocalDate eventDate = Instant.ofEpochMilli(event.getStartTime())
+          .atZone(reportingZone).toLocalDate();
       String formattedDate = eventDate.format(DateTimeFormatter.ofPattern("dd.MM.yyyy"));
 
       // The local names say "Minutes" and the values are seconds. Left alone deliberately: this
