@@ -1,0 +1,70 @@
+# Test configuration.
+#
+# This file SHADOWS src/main/resources/application.yml: target/test-classes precedes
+# target/classes on the test classpath, so `classpath:/application.yml` resolves here and
+# the production file is never read during a test run. That is deliberate - no test can
+# reach real credentials, a real broker or a real database even if it forgets
+# @ActiveProfiles("test").
+#
+# Every ${...} placeholder referenced from src/main must resolve here:
+#   spring.kafka.bootstrap-servers  -> KafkaConsumerConfig
+#   kafka.raw-event.topic           -> KafkaTopicConfig
+#   spring.mail.host/port/username/password -> MailConfig
+#   spring.mail.username            -> MailService (fromMail)
+#   event.image.path                -> EventController
+#   event.fall.threshold.value      -> RawEventService
+spring:
+  data:
+    mongodb:
+      # Placeholder only. Nothing here is expected to be reachable; Boot builds the
+      # MongoClient lazily, so this does not connect at context startup.
+      uri: mongodb://localhost:27017/engine-test
+      auto-index-creation: false
+
+  mail:
+    host: localhost
+    port: 3025
+    username: test@localhost
+    password: test-password
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+          connectiontimeout: 1000
+          timeout: 1000
+          writetimeout: 1000
+
+  kafka:
+    # Fast-failing: nothing listens on port 1, so a connection attempt is refused
+    # immediately instead of hanging on a retry/backoff loop.
+    bootstrap-servers: localhost:1
+    listener:
+      auto-startup: false
+    consumer:
+      group-id: test-group
+      auto-offset-reset: earliest
+
+kafka:
+  raw-event:
+    topic: rawEvents-test
+
+springdoc:
+  swagger-ui:
+    path: /docs/swagger-ui.html
+  api-docs:
+    path: /docs
+
+event:
+  image:
+    path: "target/test-images/"
+  fall:
+    threshold:
+      value: 3
+
+logging:
+  level:
+    org.apache.kafka: ERROR
+    org.springframework.kafka: ERROR
+    org.mongodb.driver: ERROR
