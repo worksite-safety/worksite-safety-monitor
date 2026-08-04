@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "worksite-detector"
+version = "1.0.0"
+description = "Worksite safety detector: PPE, fall and gesture events from a camera or video file"
+requires-python = ">=3.11"
+license = { text = "AGPL-3.0-or-later" }
+dependencies = ["pyyaml>=6.0"]
+
+[project.optional-dependencies]
+# The base install pulls NO computer-vision stack, so `pip install -e .[dev]`
+# followed by `pytest` runs the whole unit suite in seconds on any machine.
+# This is what keeps the TDD inner loop alive; see tests/test_architecture.py,
+# which enforces the boundary.
+dev = ["pytest>=8", "pytest-cov", "ruff", "mypy"]
+cv = ["ultralytics>=8.3,<8.4", "opencv-python>=4.8", "kafka-python-ng>=2.2"]
+
+[project.scripts]
+worksite-detector = "worksite_detector.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "--strict-markers -q"
+markers = [
+    "requires_ultralytics: test needs ultralytics and torch installed (integration tier)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
