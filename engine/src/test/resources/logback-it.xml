@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging for the Failsafe (integration-test) JVM only. Activated by
+  -Dlogback.configurationFile=logback-it.xml in the maven-failsafe-plugin configuration.
+
+  Why this file exists: Testcontainers starts the containers from a static initialiser, i.e.
+  BEFORE any Spring context boots and therefore before Spring Boot configures Logback. An
+  unconfigured Logback defaults to root=DEBUG on the console, so container startup dumps every
+  docker-java HTTP wire frame - tens of thousands of lines that bury the actual test output.
+
+  It is NOT named logback-test.xml on purpose: that name would be picked up by Surefire too and
+  would replace Spring Boot's logging setup for the 93 unit tests, which are not the problem.
+  Once a Spring context starts, Boot reconfigures Logback anyway and application.yml's
+  logging.level.* entries take over from here.
+
+  Expected side effect: Boot logs one line, "Ignoring 'logback.configurationFile' system
+  property. Please use 'logging.config' instead." That is correct and wanted - this file governs
+  only the window before Boot exists, and Boot taking over afterwards is the intent. Setting
+  logging.config instead would not silence the warning and would also override Boot's console
+  format for the whole IT run.
+-->
+<configuration>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} %-5level %logger{40} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- Container lifecycle messages ("Creating container", "Container started in ...") are
+       genuinely useful and log at INFO; the wire-level noise is DEBUG and stops here. -->
+  <logger name="org.testcontainers" level="INFO"/>
+  <logger name="com.github.dockerjava" level="WARN"/>
+  <logger name="org.testcontainers.shaded" level="WARN"/>
+  <!-- "tc.<image>" is the logger Testcontainers uses for container stdout/stderr. -->
+  <logger name="tc" level="INFO"/>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+
+</configuration>

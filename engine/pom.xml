@@ -24,13 +24,38 @@
         <swagger.openapi.version>2.0.0</swagger.openapi.version>
         <itext.pdf.version>5.5.13</itext.pdf.version>
         <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
+        <testcontainers.version>1.21.3</testcontainers.version>
         <!--
           Placeholder for JaCoCo's late-replaced @{argLine}. Surefire is configured with
           <argLine>@{argLine}</argLine>; without this default the build fails whenever
           jacoco:prepare-agent has not run (e.g. `mvn surefire:test` on its own).
         -->
         <argLine></argLine>
+        <!--
+          Same guard for Failsafe. jacoco:prepare-agent-integration sets `failsafeArgLine`;
+          without this default `mvn failsafe:integration-test` on its own would fail to
+          interpolate @{failsafeArgLine}.
+        -->
+        <failsafeArgLine></failsafeArgLine>
     </properties>
+    <dependencyManagement>
+        <dependencies>
+            <!--
+              Aligns testcontainers-core / -mongodb / -kafka / -junit-jupiter on one version.
+              Deliberately NOT tied to spring-kafka: the whole point of preferring
+              Testcontainers over @EmbeddedKafka here is that the broker used by the tests
+              does not move when spring-kafka moves (3.0.x = ZooKeeper broker, 3.1+ = KRaft).
+            -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -132,6 +157,31 @@
             <artifactId>itextpdf</artifactId>
             <version>${itext.pdf.version}</version>
         </dependency>
+
+        <!-- Testcontainers: only *IT classes (Failsafe) touch these; `mvn test` never does. -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>mongodb</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -161,6 +211,57 @@
                 </configuration>
             </plugin>
 
+            <!--
+              Failsafe owns the *IT classes. The split is the point:
+
+                ./mvnw test      -> Surefire only. No Docker, no containers, seconds.
+                                    This is the TDD inner loop and must stay that way.
+                ./mvnw verify    -> Surefire, then Failsafe (Docker required).
+
+              No <executions> block here on purpose: spring-boot-starter-parent already
+              declares integration-test + verify in its <pluginManagement>, and re-declaring
+              them risks binding the goals twice. It also sets
+              <classesDirectory>${project.build.outputDirectory}</classesDirectory> so the ITs
+              run against target/classes rather than the repackaged fat jar.
+
+              forkCount=1 + reuseForks=true keeps every IT class in ONE JVM, which is what
+              makes AbstractIntegrationTest's *static* containers a genuine singleton: the
+              containers start once and the whole IT suite shares them. Forking per class
+              would silently pay full container startup for every IT.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <configuration>
+                    <!-- Late replacement, resolved after jacoco:prepare-agent-integration. -->
+                    <argLine>@{failsafeArgLine}</argLine>
+                    <forkCount>1</forkCount>
+                    <reuseForks>true</reuseForks>
+                    <systemPropertyVariables>
+                        <spring.profiles.active>test</spring.profiles.active>
+                        <!--
+                          Containers start before any Spring context, so Logback is still
+                          unconfigured (root=DEBUG) and docker-java dumps every HTTP wire frame.
+                          Scoped to this JVM only; Surefire keeps Spring Boot's defaults.
+                        -->
+                        <logback.configurationFile>logback-it.xml</logback.configurationFile>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+
+            <!--
+              JaCoCo is split so integration coverage is not invisible:
+
+                initialize            prepare-agent             -> target/jacoco.exec     (argLine)
+                package               report                    -> target/site/jacoco     (unit only)
+                pre-integration-test  prepare-agent-integration -> target/jacoco-it.exec  (failsafeArgLine)
+                post-integration-test merge                     -> target/jacoco-merged.exec
+                post-integration-test report                    -> target/site/jacoco-merged
+
+              merge/report are bound to post-integration-test, NOT verify: failsafe:verify runs
+              at verify and fails the build on IT failures, which would skip the report exactly
+              when you most want to read it.
+            -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
@@ -178,6 +279,47 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-initialize-integration</id>
+                        <goals>
+                            <goal>prepare-agent-integration</goal>
+                        </goals>
+                        <configuration>
+                            <destFile>${project.build.directory}/jacoco-it.exec</destFile>
+                            <propertyName>failsafeArgLine</propertyName>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jacoco-merge</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>merge</goal>
+                        </goals>
+                        <configuration>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${project.build.directory}</directory>
+                                    <!-- Explicit, so a stale jacoco-merged.exec is never re-merged into itself. -->
+                                    <includes>
+                                        <include>jacoco.exec</include>
+                                        <include>jacoco-it.exec</include>
+                                    </includes>
+                                </fileSet>
+                            </fileSets>
+                            <destFile>${project.build.directory}/jacoco-merged.exec</destFile>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>jacoco-site-merged</id>
+                        <phase>post-integration-test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                        <configuration>
+                            <dataFile>${project.build.directory}/jacoco-merged.exec</dataFile>
+                            <outputDirectory>${project.reporting.outputDirectory}/jacoco-merged</outputDirectory>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
