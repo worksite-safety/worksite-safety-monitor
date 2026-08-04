@@ -1,6 +1,7 @@
 package com.graduation.project.engine.rawEvent.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -189,9 +190,53 @@ class RawEventServiceTest {
     verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
   }
 
+  @Test
+  @DisplayName("unknown eventType: persisted UNCONDITIONALLY via the else branch, threshold ignored")
+  void unknownEventType_isPersistedUnconditionally() {
+    // Nothing validates eventType against EventNameEnum. Anything the Python detector puts on
+    // the topic that is not NO_HELMET/NO_JACKET falls through to the else branch and is stored,
+    // even with a timePeriod far below the threshold that would have rejected a known periodic
+    // event. A later slice deliberately inverts this to reject-by-default.
+    RawEvent event = rawEvent("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF", BigDecimal.ZERO);
+
+    rawEventService.listener(event);
+
+    verify(eventRepository, times(1)).save(eventCaptor.capture());
+    assertEquals("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF",
+        eventCaptor.getValue().getEventType());
+    verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
+  }
+
+  @Test
+  @DisplayName("unknown eventType is stored even though no query can ever read it back")
+  void unknownEventType_isWriteOnly() {
+    // EventService only ever queries findAllByEventTypeIn([the five known names], ...), so these
+    // documents accumulate in the "event" collection and are invisible to every endpoint.
+    rawEventService.listener(rawEvent("TYPO_IN_THE_DETECTOR", null));
+
+    verify(eventRepository, times(1)).save(eventCaptor.capture());
+    assertEquals("TYPO_IN_THE_DETECTOR", eventCaptor.getValue().getEventType());
+  }
+
+  @Test
+  @DisplayName("null eventType: NullPointerException escapes the listener (poison-pill message)")
+  void nullEventType_throwsNullPointerException() {
+    // RawEvent is @JsonIgnoreProperties(ignoreUnknown = true), so a payload that simply omits
+    // eventType deserialises with a null field and blows up on the first .equals(...) call.
+    RawEvent event = rawEvent((String) null, null);
+
+    assertThrows(NullPointerException.class, () -> rawEventService.listener(event));
+
+    verify(eventRepository, never()).save(any(Event.class));
+  }
+
   private static RawEvent rawEvent(EventNameEnum type, BigDecimal timePeriod) {
+    return rawEvent(type.name(), timePeriod);
+  }
+
+  private static RawEvent rawEvent(String eventType, BigDecimal timePeriod) {
     RawEvent rawEvent = new RawEvent();
-    rawEvent.setEventType(type.name());
+    rawEvent.setEventType(eventType);
     rawEvent.setCameraName("Camera1");
     rawEvent.setConfidencePercentage(BigDecimal.valueOf(90));
     rawEvent.setIsProcessed("false");
