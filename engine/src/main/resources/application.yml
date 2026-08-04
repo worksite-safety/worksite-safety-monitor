@@ -39,7 +39,27 @@ springdoc:
 event:
   image:
     path: "${EVENT_IMAGE_PATH}"
-  fall:
-    threshold:
-      value: 3
+  periodic:
+    # The unit the DETECTOR currently sends timePeriod in - a fact about the deployed producer,
+    # not a preference. The engine normalises to milliseconds on ingest, so this is the single
+    # knob that lets the two sides deploy independently:
+    #
+    #   SECONDS  the producer in the field before the detector rewrite (int(seconds))
+    #   MILLIS   the rewritten detector
+    #
+    # FLIP THIS TO MILLIS AS PART OF THE DETECTOR RELEASE. Until then it must stay SECONDS:
+    # a millisecond producer read as seconds stores 33 ms flickers as if they were violations,
+    # and a seconds producer read as milliseconds stores nothing at all. Both are silent.
+    input-unit: SECONDS
+    # The shortest periodic violation worth storing. Was event.fall.threshold.value: 3, which
+    # named the wrong event family and carried no unit; 3 meant 3 seconds. Storage and this
+    # threshold are both milliseconds now, so the same intent is 3000.
+    min-duration-ms: 3000
+  migration:
+    periodic-to-millis:
+      # One-shot ApplicationRunner that rewrites pre-existing NO_HELMET/NO_JACKET documents from
+      # seconds to milliseconds and stamps schemaVersion=2. Idempotent, but OFF by default: a
+      # data migration must be something an operator turns on deliberately for one boot, never
+      # something that fires because a pod restarted.
+      enabled: false
 

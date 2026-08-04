@@ -50,8 +50,17 @@ import org.testcontainers.utility.DockerImageName;
  * <p>{@code src/test/resources/application.yml} shadows the production config and points Mongo
  * and Kafka at unreachable placeholders. {@link DynamicPropertySource} has higher precedence
  * than any property source loaded from a file, so the two entries below are what the context
- * actually sees. Everything else - the {@code test} profile's mail settings, image path and
- * {@code event.fall.threshold.value} - is untouched.
+ * actually sees. Everything else - the {@code test} profile's mail settings, image path and the
+ * {@code event.periodic.*} settings - is untouched.
+ *
+ * <h2>One context for the whole suite</h2>
+ *
+ * <p>No subclass may add {@code @TestPropertySource}, {@code @MockBean} or anything else that
+ * changes the context cache key. A second context starts a second {@code @KafkaListener} container
+ * in the same consumer group against a one-partition topic; the first context to boot keeps the
+ * only partition and every test in the second fails with "Expected 1 but got 0 partitions" after a
+ * 60 s wait. Per-class configuration belongs in
+ * {@code src/test/resources/application.yml}, where it applies to the single shared context.
  */
 @SpringBootTest
 @ActiveProfiles("test")

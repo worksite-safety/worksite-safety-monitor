@@ -252,14 +252,26 @@ class EventServiceTest {
   // getAllPeriodicEventsByDateIntervals
   // ---------------------------------------------------------------------------------------------
 
+  /**
+   * NOTE ON THIS TEST AND THE ONE BELOW.
+   *
+   * <p>The ASSERTED NUMBERS ARE UNCHANGED - still 12, 3, 11 here and still 10 below. What changed
+   * is the FIXTURE: {@code timePeriod} is now stored in milliseconds, so the values that used to
+   * read "5", "7", "3", "11" now read "5000", "7000", "3000", "11000". The response is still
+   * seconds and still carries the field names {@code noHelmet}/{@code noJacket}, so nothing the
+   * dashboard sees has moved.
+   *
+   * <p>That is the whole intent of holding the conversion at this boundary: the storage unit
+   * changed underneath and the API did not.
+   */
   @Test
-  @DisplayName("periodic: sums timePeriod per day, per type")
+  @DisplayName("periodic: sums timePeriod per day, per type - stored ms, reported SECONDS")
   void periodic_sumsTimePeriodPerDayPerType() {
     stubPeriodic(
-        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5"),
-        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 9, 0), "7"),
-        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 10, 0), "3"),
-        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 15, 10, 0), "11"));
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5000"),
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 9, 0), "7000"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 10, 0), "3000"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 15, 10, 0), "11000"));
 
     List<PeriodicEvents> result = eventService.getAllPeriodicEventsByDateIntervals(START, END);
 
@@ -273,18 +285,81 @@ class EventServiceTest {
   }
 
   @Test
-  @DisplayName("periodic: BigDecimal timePeriod is TRUNCATED per event via intValue(), not rounded")
+  @DisplayName("periodic: each event is TRUNCATED to whole seconds BEFORE being summed, not rounded")
   void periodic_truncatesFractionalTimePeriodPerEvent() {
     stubPeriodic(
-        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5.9"),
-        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 9, 0), "5.9"));
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5900"),
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 9, 0), "5900"));
 
     List<PeriodicEvents> result = eventService.getAllPeriodicEventsByDateIntervals(START, END);
 
-    // 5.9 + 5.9 = 11.8, but each value is truncated to 5 BEFORE being summed -> 10.
+    // 5900 ms + 5900 ms = 11.8 s, but each event is truncated to 5 s BEFORE being summed -> 10.
+    // Identical to the pre-migration behaviour, where each "5.9" was truncated by intValue().
     assertThat(result).singleElement()
         .extracting(PeriodicEvents::getNoHelmet)
         .isEqualTo(10);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // The ms -> s boundary. These are new, and they exist because the conversion is a DECISION with
+  // a visible cost, not a detail: truncation is applied PER EVENT, so the loss compounds with the
+  // number of events rather than being bounded per day.
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("periodic: rounding is TRUNCATION - a 2999 ms window reports as 2 seconds, not 3")
+  void periodic_2999MillisecondsTruncatesToTwoSeconds() {
+    stubPeriodic(periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "2999"));
+
+    assertThat(eventService.getAllPeriodicEventsByDateIntervals(START, END))
+        .singleElement()
+        .extracting(PeriodicEvents::getNoHelmet)
+        .isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("periodic: truncation is per event, so N windows lose up to N seconds in total")
+  void periodic_truncationErrorCompoundsPerEvent() {
+    // Three 999 ms windows are 2.997 s of real exposure and are reported as 0. Summing the
+    // milliseconds first and dividing once would report 2. This pins the per-event choice, which
+    // matches what the endpoint did before the unit change and keeps the chart's shape stable.
+    stubPeriodic(
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 8, 0), "999"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 9, 0), "999"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 10, 0), "999"));
+
+    assertThat(eventService.getAllPeriodicEventsByDateIntervals(START, END))
+        .singleElement()
+        .extracting(PeriodicEvents::getNoJacket)
+        .isEqualTo(0);
+  }
+
+  @Test
+  @DisplayName("periodic: the response is SECONDS, so a 6500 ms violation is 6 - not 6500")
+  void periodic_responseStaysInSecondsSoTheChartDoesNotGrow1000x() {
+    // The dashboard plots noHelmet/noJacket raw (web/src/pages/ChartsContainer.js). Returning the
+    // stored milliseconds would make every periodic chart 1000x taller overnight with no code
+    // change on the frontend and no error anywhere.
+    stubPeriodic(periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 8, 0), "6500"));
+
+    assertThat(eventService.getAllPeriodicEventsByDateIntervals(START, END))
+        .singleElement()
+        .extracting(PeriodicEvents::getNoJacket)
+        .isEqualTo(6);
+  }
+
+  @Test
+  @DisplayName("periodic: a duration beyond int milliseconds still reports the right seconds")
+  void periodic_durationBeyondIntMillisecondsIsNotTruncatedByIntValue() {
+    // 3_000_000_000 ms is ~34.7 days. The old code called intValue() on the stored BigDecimal,
+    // which returns the low-order 32 bits; the seconds value (3_000_000) fits an int comfortably,
+    // but only if the division happens on the BigDecimal rather than after a wrapped intValue().
+    stubPeriodic(periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "3000000000"));
+
+    assertThat(eventService.getAllPeriodicEventsByDateIntervals(START, END))
+        .singleElement()
+        .extracting(PeriodicEvents::getNoHelmet)
+        .isEqualTo(3_000_000);
   }
 
   @Test

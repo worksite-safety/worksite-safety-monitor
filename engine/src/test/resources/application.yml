@@ -13,7 +13,8 @@
 #   spring.mail.host/port/username/password -> MailConfig
 #   spring.mail.username            -> MailService (fromMail)
 #   event.image.path                -> EventController
-#   event.fall.threshold.value      -> RawEventService
+#   event.periodic.min-duration-ms  -> RawEventService
+#   event.periodic.input-unit       -> RawEventService
 spring:
   data:
     mongodb:
@@ -71,9 +72,26 @@ springdoc:
 event:
   image:
     path: "target/test-images/"
-  fall:
-    threshold:
-      value: 3
+  periodic:
+    # MILLIS, while src/main defaults to SECONDS. Deliberate, and it must be set HERE rather than
+    # with @TestPropertySource on the one IT that needs it.
+    #
+    # RawEventListenerIT's payload() helper emits the REWRITTEN detector's wire shape, which is
+    # milliseconds in both time fields, so the engine has to be told MILLIS for that IT to assert
+    # the stored value equals the value it sent.
+    #
+    # WHY NOT @TestPropertySource: any property override gives that class its own Spring context
+    # key, so the suite builds a SECOND context. Both contexts start a @KafkaListener container in
+    # consumer group ${kafka.raw-event.group-id} against a one-partition topic, the first context
+    # to boot keeps the only partition, and every test in the second dies on
+    # "Expected 1 but got 0 partitions" after a 60 s wait. Measured, not theorised. One context
+    # for the whole IT suite is load-bearing here, exactly as it is for the static containers in
+    # AbstractIntegrationTest.
+    #
+    # The SECONDS path is not left uncovered: RawEventServiceTest exercises both units directly,
+    # and the unit is a boundary concern that never reaches the broker or the mapper.
+    input-unit: MILLIS
+    min-duration-ms: 3000
 
 logging:
   level:

@@ -119,8 +119,8 @@ class RawEventListenerIT extends AbstractIntegrationTest {
   @Value("${kafka.raw-event.topic}")
   private String topic;
 
-  @Value("${event.fall.threshold.value}")
-  private int fallEventThreshold;
+  @Value("${event.periodic.min-duration-ms}")
+  private long minPeriodicDurationMs;
 
   private ListAppender<ILoggingEvent> serviceLogs;
 
@@ -175,7 +175,7 @@ class RawEventListenerIT extends AbstractIntegrationTest {
   void wellFormedEventIsPersisted() {
     String camera = "camera-happy-" + UUID.randomUUID();
     long startTime = 1_700_000_000_000L;
-    long timePeriod = fallEventThreshold + 5_000L;
+    long timePeriod = minPeriodicDurationMs + 5_000L;
 
     send(topic, payload(camera, EventNameEnum.NO_HELMET.name(), 0.93, timePeriod, startTime));
 
