@@ -132,8 +132,21 @@ class PoseDetection:
     and the case that the original skipped the rest of the frame over.
 
     Attributes:
-        keypoints_xy: Per person, 17 ``(x, y)`` pairs in COCO order, in image pixels. A
-            keypoint the model did not find arrives as ``(0.0, 0.0)``.
+        keypoints_xy: Per person, 17 ``(x, y)`` pairs in COCO order, in image pixels.
+
+            An unfound keypoint used to arrive as ``(0.0, 0.0)``: ultralytics 8.0.x zeroed
+            any keypoint below its confidence threshold, and that sentinel is what the
+            degenerate-input guards in :mod:`geometry` and :mod:`draw_plan` were built to
+            catch. **8.3 no longer zeroes them** -- it reports a plausible guessed position
+            with a low confidence instead. Measured on the library's own sample images at
+            three thresholds: no exact ``(0, 0)`` keypoints at all, and 13 to 29 below 0.5
+            confidence, every one of them with believable coordinates. The recorded baseline
+            trace contains no sentinels either.
+
+            So those guards are now a second line that is rarely reached, and
+            ``keypoint_visibility`` is the only thing standing between a guessed elbow and a
+            published gesture. Lower it and the rules start deciding on positions the model
+            was not confident about, with nothing downstream able to tell.
         keypoint_conf: Per person, 17 visibility scores, index-aligned with the keypoints.
         box_conf: Per person, the confidence of the person *box*. This is what is published
             as an event's ``confidencePercentage``; the original published a keypoint
