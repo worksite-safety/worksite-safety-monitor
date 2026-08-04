@@ -354,21 +354,26 @@ pyrightconfig.json
 .history
 .ionide
 
-AIModule/data/images/
-AIModule/data/labels/
-AIModule/data/test/images/
-AIModule/data/test/labels/
-AIModule/data/train/labels/
-AIModule/data/train/images/
-AIModule/data/val/images/
-AIModule/data/val/labels/
-
-
-AIModule/aug_data/test/labels/
-AIModule/aug_data/test/images/
-AIModule/aug_data/train/labels/
-AIModule/aug_data/train/images/
-AIModule/aug_data/val/labels/
-AIModule/aug_data/val/images/
-
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,java,node
+
+### Open-source release ###
+# IDE module metadata
+*.iml
+
+# Model weights. best.pt ships as a GitHub Release asset; yolov8s-pose.pt is
+# downloaded by ultralytics at runtime. Neither belongs in git — they are what
+# made this repository 250 MB before the v1.0.0 history rewrite.
+*.pt
+
+# Training runs and the detector's per-frame output image are runtime artifacts.
+runs/
+output_image.jpg
+
+# Local configuration. Every secret is supplied by environment variable now;
+# see .env.example in each module.
+.env
+*.env.local
+
+# Training datasets are not distributable and are never committed.
+detector/data/
+detector/aug_data/

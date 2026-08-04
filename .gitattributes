@@ -1,0 +1,22 @@
+# Normalise line endings in the repository to LF regardless of contributor
+# platform. Verified inert at the time of writing: no tracked text blob contains
+# CR, so this introduces no diff.
+* text=auto eol=lf
+
+# Binary assets — never diffed, never line-ending converted.
+*.png binary
+*.jpg binary
+*.ico binary
+*.svg text eol=lf
+*.jar binary
+*.pt  binary
+*.mp4 binary
+
+# Generated / vendored files: exclude from language statistics and diffs.
+designer/package-lock.json linguist-generated=true -diff
+engine/.mvn/** linguist-vendored=true
+engine/mvnw    text eol=lf
+engine/mvnw.cmd text eol=crlf
+
+# Jupyter notebooks produce unreadable diffs; keep them out of review noise.
+*.ipynb -diff linguist-documentation=true
