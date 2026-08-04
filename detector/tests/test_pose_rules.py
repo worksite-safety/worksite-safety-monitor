@@ -35,10 +35,19 @@ one it pins:
    were constrained by nothing, so the number published could be the near-zero score of a
    limb that was never seen.
 
-**Every figure comes from `make_person`.** It builds a stick figure whose hip, shoulder and
-knee chains measure exactly the angles asked for, and `tests/test_support.py` measures all
-three back out through the same `joint_angle` the rules call. Hand-placed coordinates would
-make each test an assertion about arithmetic nobody checked.
+**Almost every figure comes from `make_person`.** It builds a stick figure whose hip,
+shoulder and knee chains measure exactly the angles asked for, and `tests/test_support.py`
+measures all three back out through the same `joint_angle` the rules call. Hand-placed
+coordinates would make each test an assertion about arithmetic nobody checked.
+
+The two exceptions are the strict-comparison tests, which assert what happens *at* a
+threshold rather than either side of one. `make_person` reaches an angle through sin and cos
+and misses it by up to 3e-14 in a direction that is not predictable -- 159 degrees measures
+158.99999999999997 -- so an assertion at the threshold passes or fails on which way the
+rounding fell, and flips silently the next time the fixture's geometry is retuned. Those two
+place their coordinates directly, from powers of two, so the angle is exact in binary; see
+the note above `_exact_person`. Nothing else in this file goes near a threshold by less than
+a degree.
 
 `make_person` returns `tests._support.builders.PersonObservation`, a structural stand-in
 for the real value object, and the detector is fed it directly. That is deliberate: the
@@ -72,16 +81,26 @@ from tests._support.keypoints import (
     LEFT_ANKLE,
     LEFT_ELBOW,
     LEFT_HIP,
+    LEFT_KNEE,
     LEFT_SHOULDER,
+    LEFT_WRIST,
     RIGHT_ANKLE,
     RIGHT_ELBOW,
     RIGHT_HIP,
+    RIGHT_KNEE,
     RIGHT_SHOULDER,
     RIGHT_SIDE_INDICES,
+    RIGHT_WRIST,
 )
-from worksite_detector.config import Config
+from worksite_detector.config import Config, GestureSpec
 from worksite_detector.events import DetectionEvent, EventType
 from worksite_detector.pose_rules import GestureDetector, PersonObservation
+
+Point = tuple[float, float]
+
+#: What `update` accepts. `make_person` builds the fixture stand-in and the two exact-angle
+#: tests build the real value object; the detector must read either one by attribute.
+AnyObservation = FixtureObservation | PersonObservation
 
 CAMERA = "kamera-üst"
 
@@ -126,6 +145,15 @@ OVER_STRICT_GATE = 0.85
 #: A looser posture gate than the 160-degree default, paired with `KNEE_CROUCHED` above it
 #: and `KNEE_SEATED` below it.
 LOW_UPRIGHT_GATE = 100.0
+
+#: The threshold both strict-comparison tests are run against -- as a gesture's `maintaining`
+#: in one and as the posture gate in the other. 90 degrees rather than the shipped 130 or 160
+#: for one reason only: it can be placed exactly. See `_exact_person`.
+EXACT_THRESHOLD = 90.0
+
+#: Per-keypoint score for a keypoint the exact-angle figures place. Over the 0.6 gate, and
+#: the same value `make_person` uses, so the two kinds of figure are seen alike.
+WELL_SEEN = 0.9
 
 
 # --------------------------------------------------------------------------
@@ -241,9 +269,111 @@ def _unseen(person: FixtureObservation, *indices: int) -> FixtureObservation:
     return replace(person, keypoints_xy=tuple(points), keypoint_conf=tuple(conf))
 
 
+# --------------------------------------------------------------------------
+# Exact-angle figures, for the two tests that assert what happens AT a threshold.
+#
+# `make_person` works in bearings and lengths, through sin and cos, so the angle it returns
+# misses the one it was asked for by up to ~3e-14 -- 159 degrees comes back as
+# 158.99999999999997, 161 comes back exact -- and which side of nominal a given value lands
+# on cannot be predicted from the value. That is irrelevant wherever a test sits a degree or
+# more clear of the comparison, and it is fatal at the comparison itself: the assertion then
+# holds by rounding accident and reverses silently if the fixture's geometry is ever retuned.
+#
+# So these place their coordinates directly. Every offset is a power of two, which makes the
+# coordinates, their differences, the cross product and the dot product all exact in binary,
+# and `joint_angle` then returns the named angle bit for bit -- confirmed at several vertex
+# positions, since the answer must not depend on where in frame the figure sits.
+# --------------------------------------------------------------------------
+
+#: (offset from the vertex to end_a, offset to end_b), per angle they measure.
+EXACT_180: tuple[Point, Point] = ((64.0, 0.0), (-64.0, 0.0))
+EXACT_90: tuple[Point, Point] = ((64.0, 0.0), (0.0, -64.0))
+EXACT_45: tuple[Point, Point] = ((64.0, 0.0), (64.0, -64.0))
+
+
+def _exact_person(*chains: tuple[tuple[int, int, int], tuple[Point, Point]]) -> PersonObservation:
+    """A figure whose chains measure their named angles exactly, to the last bit.
+
+    Each argument pairs an `[end_a, vertex, end_b]` triple of COCO indices with the two
+    offsets that define it. Chains share no keypoint and are placed at separate vertices, so
+    each measures independently; every keypoint no chain names is left at YOLO's not-found
+    sentinel with zero confidence, because no rule under test reads one.
+
+    Reach for this ONLY where a threshold is at stake -- everywhere else `make_person` builds
+    a figure that is a recognisable human being, and this one is not.
+    """
+    points = [MISSING_POINT] * KEYPOINT_COUNT
+    conf = [0.0] * KEYPOINT_COUNT
+
+    for n, ((end_a, vertex, end_b), (offset_a, offset_b)) in enumerate(chains):
+        vertex_x, vertex_y = 128.0 * (n + 1), 256.0
+        points[vertex] = (vertex_x, vertex_y)
+        points[end_a] = (vertex_x + offset_a[0], vertex_y + offset_a[1])
+        points[end_b] = (vertex_x + offset_b[0], vertex_y + offset_b[1])
+        for index in (end_a, vertex, end_b):
+            conf[index] = WELL_SEEN
+
+    return PersonObservation(
+        person_id=0,
+        keypoints_xy=tuple(points),
+        keypoint_conf=tuple(conf),
+        detection_confidence=WELL_SEEN,
+    )
+
+
+def _exact_gesture(*, requires_upright: bool) -> GestureSpec:
+    """A gesture measured at the elbow, whose `maintaining` is an angle that can be placed.
+
+    `GestureDetector` takes its gestures as an argument, which is what makes a strict
+    comparison testable at all: FRONT_BEND's shipped 130 and the shipped 160 posture gate are
+    both unreachable exactly through any fixture, and 90 is not. The visibility gate covers
+    the posture chain as well as its own -- what `Config` demands of a gesture that depends
+    on the upright check -- so the figure is seen the same way whichever chain a reader gates.
+    """
+    return GestureSpec(
+        event_type=EventType.FRONT_BEND,
+        left_points_idx=(LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST),
+        right_points_idx=(RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST),
+        left_visibility_idx=(
+            LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST, LEFT_HIP, LEFT_KNEE, LEFT_ANKLE,
+        ),
+        right_visibility_idx=(
+            RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST, RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE,
+        ),
+        maintaining=EXACT_THRESHOLD,
+        relaxing=140.0,
+        requires_upright=requires_upright,
+    )
+
+
+def _exact_figure(gesture: tuple[Point, Point], upright: tuple[Point, Point]) -> PersonObservation:
+    """One figure carrying the gesture angle on both elbows and the posture angle on both legs."""
+    return _exact_person(
+        ((LEFT_SHOULDER, LEFT_ELBOW, LEFT_WRIST), gesture),
+        ((RIGHT_SHOULDER, RIGHT_ELBOW, RIGHT_WRIST), gesture),
+        ((LEFT_HIP, LEFT_KNEE, LEFT_ANKLE), upright),
+        ((RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE), upright),
+    )
+
+
+def _exact_cycle(
+    gesture: tuple[Point, Point], *, upright: tuple[Point, Point] = EXACT_180
+) -> list[PersonObservation]:
+    """Released, the given gesture angle, released again -- one cycle, in exact figures.
+
+    180 degrees is over the spec's 140 `relaxing`, so the outer frames release whatever they
+    find and the middle frame is the only thing under test.
+    """
+    return [
+        _exact_figure(EXACT_180, upright),
+        _exact_figure(gesture, upright),
+        _exact_figure(EXACT_180, upright),
+    ]
+
+
 def _run(
     detector: GestureDetector,
-    poses: Sequence[FixtureObservation],
+    poses: Sequence[AnyObservation],
     *,
     start_ms: int = 0,
     step_ms: int = 100,
@@ -256,7 +386,7 @@ def _run(
     return emitted
 
 
-def _per_frame(detector: GestureDetector, poses: Sequence[FixtureObservation]) -> list[int]:
+def _per_frame(detector: GestureDetector, poses: Sequence[AnyObservation]) -> list[int]:
     """How many events each frame produced -- the shape a totals-only assertion hides."""
     times = frame_sequence(len(poses))
     return [
@@ -314,14 +444,33 @@ def test_right_only_visibility_uses_right_angle_alone() -> None:
 
 
 def test_both_sides_visible_average_the_angles() -> None:
-    # Two sides that BOTH passed the gate are averaged, and the comparison against
-    # `maintaining` is strict -- so a mean landing exactly on 130 does not arm the gesture.
-    # The pair is one test on purpose: reading a single side instead of the mean, or
-    # softening `<` to `<=`, breaks exactly one half and leaves the other green.
-    on_boundary = _run(_detector(), _split_bend_cycle(left_deg=120.0, right_deg=140.0))
-    inside_band = _run(_detector(), _split_bend_cycle(left_deg=100.0, right_deg=140.0))
+    # Two sides that BOTH passed the gate are averaged, and neither decides alone. The two
+    # halves catch the two single-side misreadings between them: reading the LEFT alone arms
+    # on 110 and emits in the first half, where the mean of 140 must not; reading the RIGHT
+    # alone never arms on 170 and stays silent in the second, where the mean of 115 must
+    # emit. Both means sit 10 to 15 degrees clear of the 130 threshold, so no plausible drift
+    # in the fixture's trigonometry can reach the comparison. The strict `<` AT the threshold
+    # is a separate question and is pinned by the test below, which does not go through
+    # `make_person` at all -- this pair deliberately stays away from the boundary.
+    left_arming = _run(_detector(), _split_bend_cycle(left_deg=110.0, right_deg=170.0))
+    mean_arming = _run(_detector(), _split_bend_cycle(left_deg=60.0, right_deg=170.0))
 
-    assert (_types(on_boundary), _types(inside_band)) == ([], [EventType.FRONT_BEND])
+    assert (_types(left_arming), _types(mean_arming)) == ([], [EventType.FRONT_BEND])
+
+
+def test_maintaining_comparison_is_strict_at_the_threshold() -> None:
+    # `angle < maintaining` arms the gesture, so the threshold value ITSELF must not arm it.
+    # This assertion used to ride on `make_person(120)` measuring 120.00000000000001, which
+    # made the mean of 120 and 140 land on exactly 130.0 by rounding accident -- a hair the
+    # other way and it would have armed and the test would have inverted, with nothing to
+    # say why. Here the gesture's `maintaining` is 90 degrees and the frames are exactly 90
+    # (must not arm) and exactly 45 (must), both placed rather than computed.
+    gestures = (_exact_gesture(requires_upright=False),)
+
+    on_threshold = _run(_detector(gestures=gestures), _exact_cycle(EXACT_90))
+    under_threshold = _run(_detector(gestures=gestures), _exact_cycle(EXACT_45))
+
+    assert (_types(on_threshold), _types(under_threshold)) == ([], [EventType.FRONT_BEND])
 
 
 @pytest.mark.parametrize(
@@ -379,15 +528,41 @@ def test_front_bend_suppressed_when_seated() -> None:
 
 @pytest.mark.parametrize(
     ("knee_deg", "expected"),
-    [(160.0, []), (161.0, [EventType.FRONT_BEND])],
-    ids=["exactly-at-gate", "just-over-gate"],
+    [(159.0, []), (161.0, [EventType.FRONT_BEND])],
+    ids=["under-gate", "over-gate"],
 )
 def test_upright_boundary(knee_deg: float, expected: list[EventType]) -> None:
-    # `calculate_angle(...) > 160` (line 322), kept exactly: 160 degrees is not upright, 161
-    # is. Both sides are pinned so an off-by-one cannot satisfy either half alone.
+    # `calculate_angle(...) > 160` (line 322), kept: the default gate is pinned by bracketing
+    # it a degree either side, which no other test in the file constrains.
+    #
+    # It is deliberately NOT asserted at 160.0 itself. `make_person` misses a requested angle
+    # by up to 3e-14 in an unpredictable direction -- 159 measures 158.99999999999997 while
+    # 161 comes back exact -- so a test at the gate would hold or fail on which way the
+    # rounding fell that day. A degree of margin is thirteen orders of magnitude clear of it.
+    # The strict `>` at the gate is pinned exactly, and separately, by the test below.
     emitted = _run(_detector(), _bend_cycle(knee_deg=knee_deg))
 
     assert _types(emitted) == expected
+
+
+def test_upright_comparison_is_strict_at_the_gate() -> None:
+    # The other half: `posture > upright_angle`, so the gate value itself is NOT upright --
+    # the original's `> 160`, not `>= 160`. Measured on a posture chain placed at exactly the
+    # gate (suppressed) and at exactly 180 (emitted), with the gesture completing a full
+    # cycle either way so the only thing separating the two is the posture comparison.
+    gestures = (_exact_gesture(requires_upright=True),)
+    wiring: dict[str, Any] = {
+        "upright_left_idx": (LEFT_HIP, LEFT_KNEE, LEFT_ANKLE),
+        "upright_right_idx": (RIGHT_HIP, RIGHT_KNEE, RIGHT_ANKLE),
+        "upright_angle": EXACT_THRESHOLD,
+    }
+
+    on_gate = _run(_detector(gestures=gestures, **wiring), _exact_cycle(EXACT_45, upright=EXACT_90))
+    over_gate = _run(
+        _detector(gestures=gestures, **wiring), _exact_cycle(EXACT_45, upright=EXACT_180)
+    )
+
+    assert (_types(on_gate), _types(over_gate)) == ([], [EventType.FRONT_BEND])
 
 
 def test_arms_up_is_not_gated_by_upright() -> None:
