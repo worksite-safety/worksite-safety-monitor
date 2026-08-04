@@ -1,27 +1,42 @@
 package com.graduation.project.engine.core.securityConfig;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.event.service.EventService;
+import com.graduation.project.engine.user.model.Role;
+import com.graduation.project.engine.user.model.Token;
+import com.graduation.project.engine.user.model.TokenType;
+import com.graduation.project.engine.user.model.User;
 import com.graduation.project.engine.user.repository.TokenRepository;
 import com.graduation.project.engine.user.service.UserService;
 import com.google.gson.Gson;
-import io.jsonwebtoken.io.DecodingException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import java.security.Key;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
@@ -41,14 +56,21 @@ import org.springframework.test.web.servlet.MvcResult;
  * layer is loaded, so no broker, mail server or database is involved; every collaborator the
  * filter chain or the controllers need is a {@code @MockBean}.
  *
- * <p>{@link JwtService} is imported for real rather than mocked so that
- * {@link #bearerHeader_blowsUpTheFilterChain()} can pin what a real request carrying a token does
- * today. Every other test here sends no {@code Authorization} header, so the filter short-circuits
- * before touching it.
+ * <p>{@link JwtService} is imported for real rather than mocked, and is signed with the throwaway
+ * {@code jwt.secret} in {@code src/test/resources/application.yml}. That is what lets the
+ * bearer-token tests below mint tokens the server genuinely accepts, backdate one to prove
+ * expiry, and sign another with a foreign key to prove forgery is rejected - none of which a
+ * mocked JwtService could show.
  *
- * <p>Two behaviours pinned here are known defects that later slices will change deliberately:
- * unauthenticated requests answer <b>403, not 401</b>, and {@code POST /mail/send/{mail}} is
- * <b>public</b> - an unauthenticated open mail relay.
+ * <p>One behaviour pinned here is a known defect that a later slice will change deliberately:
+ * unauthenticated requests answer <b>403, not 401</b>.
+ *
+ * <p>The open mail relay that used to be pinned here is gone: {@code MailController} - which let
+ * any anonymous caller {@code POST /mail/send/{address}} and have the server mail that address -
+ * has been deleted, and {@link #mailSend_relayEndpointIsDeleted()} now measures its absence.
+ * {@code "/mail/**"} remains in {@code PUBLIC_URLS}, so the URL is still reachable and simply
+ * resolves to nothing; removing that entry is a {@link SecurityConfiguration} change owned
+ * elsewhere.
  */
 @WebMvcTest
 @ActiveProfiles("test")
@@ -57,6 +79,14 @@ class SecurityMatrixTest {
 
   @Autowired
   private MockMvc mockMvc;
+
+  /** The real bean, used to mint tokens the server will accept - not a hand-rolled equivalent. */
+  @Autowired
+  private JwtService jwtService;
+
+  /** The same secret the JwtService bean was built with, so tests can forge and backdate. */
+  @Value("${jwt.secret}")
+  private String configuredSecret;
 
   // Filter-chain collaborators that live outside the web layer.
   @MockBean
@@ -174,17 +204,36 @@ class SecurityMatrixTest {
   }
 
   @Test
-  @DisplayName("DEFECT PINNED: POST /mail/send/{mail} is public - an unauthenticated open mail relay")
-  void mailSend_isCurrentlyAnOpenRelay() throws Exception {
+  @DisplayName("the open mail relay is GONE: POST /mail/send/{mail} maps to nothing and sends nothing")
+  void mailSend_relayEndpointIsDeleted() throws Exception {
     MvcResult result = mockMvc.perform(post("/mail/send/victim@example.com")).andReturn();
 
-    assertThat(result.getResponse().getStatus()).isEqualTo(200);
-    assertThat(result.getResponse().getContentAsString()).isEqualTo("Successfuly mail sended !!");
+    // INVERTED. This previously asserted 200 + "Successfuly mail sended !!" + a real
+    // sendUrgentEventMail call, pinning MailController as an unauthenticated open mail relay:
+    // any anonymous caller could make the server send mail to an address of their choosing, with
+    // a hardcoded sender identity, as many times as they liked. The controller is deleted.
+    //
+    // The status is 403 because "/mail/**" has also been removed from PUBLIC_URLS, so the request
+    // never reaches the DispatcherServlet. That alone would not prove the controller is gone --
+    // securing a URL and deleting its handler look identical from out here -- so the class's
+    // absence is asserted directly below. Both facts matter: the handler must not exist, AND no
+    // stale permitAll entry may survive it.
+    assertThat(result.getResponse().getStatus()).isEqualTo(403);
+    assertThat(result.getResponse().getContentAsString()).doesNotContain("mail sended");
 
-    // And it really does send: an anonymous caller can make the server mail any address it likes.
-    // A later slice deletes this endpoint; this test pins that removal as intentional, not a
-    // regression.
-    verify(mailService).sendUrgentEventMail(any(), any(LocalDateTime.class), eq("0"));
+    // The whole point of the removal: no anonymous request can cause an outbound mail.
+    verifyNoInteractions(mailService);
+  }
+
+  @Test
+  @DisplayName("no MailController class remains on the classpath")
+  void mailControllerClassIsGone() {
+    // Proves the handler was deleted rather than merely made unreachable. Without this, restoring
+    // the controller and a permitAll entry together would reopen the relay while the status
+    // assertion above still passed on some other 403.
+    assertThatThrownBy(
+        () -> Class.forName("com.graduation.project.engine.email.controller.MailController"))
+        .isInstanceOf(ClassNotFoundException.class);
   }
 
   @ParameterizedTest(name = "{0} is public")
@@ -204,28 +253,148 @@ class SecurityMatrixTest {
   }
 
   // -------------------------------------------------------------------------------------------
-  // The broken JWT secret, observed at the HTTP layer
+  // Unusable tokens are REJECTED, not fatal
+  // -------------------------------------------------------------------------------------------
+  //
+  // A token the server cannot verify is an ordinary authentication outcome, not a server fault.
+  // Every case below must land on the same 403 an anonymous request gets, because the alternative
+  // is a 500 raised INSIDE the servlet filter chain - outside DispatcherServlet, where
+  // @ControllerAdvice can never reach it. A browser holding one stale token would then get a bare
+  // 500 on every endpoint it touches, public ones included.
+
+  @Test
+  @DisplayName("expired token -> 403 with the entry point body, NOT 500")
+  void expiredToken_isRejectedNotFatal() throws Exception {
+    String expired = signedToken(appKey(), Instant.now().minus(2, ChronoUnit.HOURS),
+        Instant.now().minus(1, ChronoUnit.HOURS));
+
+    MvcResult result = mockMvc.perform(get("/event/all-events")
+        .header("Authorization", "Bearer " + expired)).andReturn();
+
+    assertThat(result.getResponse().getStatus()).isEqualTo(403);
+    assertEntryPointBody(result, "/event/all-events");
+  }
+
+  @Test
+  @DisplayName("valid structure, wrong signing key -> 403, NOT 500")
+  void wrongSignature_isRejectedNotFatal() throws Exception {
+    // Correct three-part shape, unexpired, parses cleanly - and signed by someone else. This is
+    // the forged-token case, and it must be indistinguishable from "no token" to the caller.
+    Key foreignKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
+        "d3Jvbmctc2lnbmF0dXJlLWtleS11c2VkLW9ubHktYnktdGhlLXNlY3VyaXR5LXRlc3RzLTAxMjM0NTY3ODk="));
+    String forged = signedToken(foreignKey, Instant.now(), Instant.now().plus(1, ChronoUnit.HOURS));
+
+    MvcResult result = mockMvc.perform(get("/event/all-events")
+        .header("Authorization", "Bearer " + forged)).andReturn();
+
+    assertThat(result.getResponse().getStatus()).isEqualTo(403);
+    assertEntryPointBody(result, "/event/all-events");
+  }
+
+  @ParameterizedTest(name = "garbage bearer value [{0}] -> 403")
+  @ValueSource(strings = {
+      "not-a-jwt",
+      "a.b.c",
+      "eyJhbGciOiJIUzI1NiJ9.this-half-is-not-base64.sig",
+      "....",
+      " ",
+  })
+  @DisplayName("malformed Authorization: Bearer values -> 403, NOT 500")
+  void malformedBearerValue_isRejectedNotFatal(String garbage) throws Exception {
+    int status = mockMvc.perform(get("/event/all-events")
+            .header("Authorization", "Bearer " + garbage))
+        .andReturn().getResponse().getStatus();
+
+    assertThat(status).isEqualTo(403);
+  }
+
+  @Test
+  @DisplayName("an empty Bearer value -> 403, NOT 500 (jjwt raises IllegalArgumentException here, not JwtException)")
+  void emptyBearerValue_isRejectedNotFatal() throws Exception {
+    // "Bearer " passes the startsWith check, so substring(7) hands jjwt an empty string. jjwt
+    // answers with a plain IllegalArgumentException rather than a JwtException, so catching only
+    // JwtException in the filter would still 500 on this one. Pinned separately for that reason.
+    int status = mockMvc.perform(get("/event/all-events").header("Authorization", "Bearer "))
+        .andReturn().getResponse().getStatus();
+
+    assertThat(status).isEqualTo(403);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // ...and a good token still gets in
   // -------------------------------------------------------------------------------------------
 
   @Test
-  @DisplayName("DEFECT PINNED: ANY request with a Bearer header blows the filter chain up (broken secret)")
-  void bearerHeader_blowsUpTheFilterChain() {
-    // JwtAuthenticationFilter calls jwtService.extractUsername(jwt) for every Bearer request, and
-    // JwtService cannot build its signing key (see JwtServiceTest). The exception escapes the
-    // servlet filter chain, so @ControllerAdvice never sees it: in a real deployment this is a
-    // bare 500 on every authenticated call, which is why nothing can be logged into today.
-    Throwable thrown = catchThrowable(() -> mockMvc.perform(
-        get("/event/all-events").header("Authorization", "Bearer any.jwt.value")));
+  @DisplayName("a token this server issued authenticates and reaches the controller")
+  void validToken_authenticates() throws Exception {
+    // Without this test, "reject everything that does not parse" and "reject everything" pass the
+    // same assertions, and the API would be exactly as unusable as before - only with a tidier
+    // status code. This is the test that says the pipe is open.
+    User admin = User.builder().id("u1").email("aziz@example.com").password("hashed")
+        .role(Role.ADMIN).build();
+    String token = jwtService.generateToken(admin);
 
-    assertThat(thrown).isNotNull();
-    assertThat(causalChainOf(thrown)).hasAtLeastOneElementOfType(DecodingException.class);
+    when(userDetailsService.loadUserByUsername("aziz@example.com")).thenReturn(admin);
+    when(tokenRepository.findByToken(token))
+        .thenReturn(Optional.of(Token.builder().token(token).user(admin)
+            .tokenType(TokenType.BEARER).expired(false).revoked(false).build()));
+    when(eventService.getAllEvents()).thenReturn(List.of());
+
+    MvcResult result = mockMvc.perform(get("/event/all-events")
+        .header("Authorization", "Bearer " + token)).andReturn();
+
+    assertThat(result.getResponse().getStatus()).isEqualTo(200);
+    assertThat(result.getResponse().getContentAsString()).isEqualTo("[]");
   }
 
-  private static List<Throwable> causalChainOf(Throwable throwable) {
-    java.util.List<Throwable> chain = new java.util.ArrayList<>();
-    for (Throwable t = throwable; t != null && !chain.contains(t); t = t.getCause()) {
-      chain.add(t);
-    }
-    return chain;
+  @Test
+  @DisplayName("a revoked token is refused even though it verifies and has not expired")
+  void revokedToken_isRefused() throws Exception {
+    // The DB-side half of the check. Logout marks tokens revoked; the signature stays valid until
+    // exp, so only tokenRepository can tell the difference.
+    User admin = User.builder().id("u1").email("aziz@example.com").password("hashed")
+        .role(Role.ADMIN).build();
+    String token = jwtService.generateToken(admin);
+
+    when(userDetailsService.loadUserByUsername("aziz@example.com")).thenReturn(admin);
+    when(tokenRepository.findByToken(token))
+        .thenReturn(Optional.of(Token.builder().token(token).user(admin)
+            .tokenType(TokenType.BEARER).expired(false).revoked(true).build()));
+
+    int status = mockMvc.perform(get("/event/all-events")
+        .header("Authorization", "Bearer " + token)).andReturn().getResponse().getStatus();
+
+    assertThat(status).isEqualTo(403);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------------------------
+
+  /** The key the application itself is configured with, read from src/test/resources. */
+  private Key appKey() {
+    return Keys.hmacShaKeyFor(Decoders.BASE64.decode(configuredSecret));
+  }
+
+  private static String signedToken(Key key, Instant issuedAt, Instant expiresAt) {
+    return Jwts.builder()
+        .setSubject("aziz@example.com")
+        .claim("authorities", List.of(Map.of("authority", "ADMIN")))
+        .setIssuedAt(Date.from(issuedAt))
+        .setExpiration(Date.from(expiresAt))
+        .signWith(key, SignatureAlgorithm.HS256)
+        .compact();
+  }
+
+  private static void assertEntryPointBody(MvcResult result, String path) throws Exception {
+    assertThat(result.getResponse().getContentType()).isEqualTo("application/json;charset=UTF-8");
+    List<?> body = new Gson().fromJson(result.getResponse().getContentAsString(), List.class);
+    assertThat(body).hasSize(1);
+    @SuppressWarnings("unchecked")
+    Map<String, String> entry = (Map<String, String>) body.get(0);
+    assertThat(entry.get("code")).isEqualTo("403");
+    assertThat(entry.get("statusMessage")).isEqualTo("Forbidden");
+    assertThat(entry.get("message")).isEqualTo("Access denied");
+    assertThat(entry.get("path")).isEqualTo(path);
   }
 }

@@ -1,14 +1,22 @@
 package com.graduation.project.engine.rawEvent.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.graduation.project.engine.email.service.MailService;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.EventNameEnum;
@@ -20,11 +28,14 @@ import com.graduation.project.engine.user.model.User;
 import com.graduation.project.engine.user.model.converter.UserResponseDto2UserConverter;
 import com.graduation.project.engine.user.model.response.UserResponseDto;
 import com.graduation.project.engine.user.service.UserService;
+import jakarta.mail.MessagingException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +45,8 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.mail.MailSendException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /**
@@ -87,6 +100,13 @@ class RawEventServiceTest {
   @Captor
   private ArgumentCaptor<User> userCaptor;
 
+  /**
+   * Captures what the service logs. Two of the contracts here are log lines and nothing else -
+   * a dropped unrecognised event and a mail that could not be sent both leave no other trace -
+   * so "it logged exactly one WARNING" is the assertion, not a nicety.
+   */
+  private ListAppender<ILoggingEvent> logs;
+
   @BeforeEach
   void setUp() {
     // Both are @Value-injected fields rather than constructor parameters, so they stay 0/null in
@@ -96,6 +116,24 @@ class RawEventServiceTest {
     ReflectionTestUtils.setField(rawEventService, "minPeriodicDurationMs",
         MIN_PERIODIC_DURATION_MS);
     ReflectionTestUtils.setField(rawEventService, "periodicInputUnit", PeriodicInputUnit.SECONDS);
+
+    logs = new ListAppender<>();
+    logs.start();
+    serviceLogger().addAppender(logs);
+  }
+
+  @AfterEach
+  void tearDown() {
+    serviceLogger().detachAppender(logs);
+    logs.stop();
+  }
+
+  private static ch.qos.logback.classic.Logger serviceLogger() {
+    return (ch.qos.logback.classic.Logger) LoggerFactory.getLogger(RawEventService.class);
+  }
+
+  private List<ILoggingEvent> logsAt(Level level) {
+    return new ArrayList<>(logs.list).stream().filter(e -> e.getLevel() == level).toList();
   }
 
   @Test
@@ -137,6 +175,110 @@ class RawEventServiceTest {
     verify(eventRepository, times(1)).save(eventCaptor.capture());
     assertEquals(EventNameEnum.FALL.name(), eventCaptor.getValue().getEventType());
     assertEquals("Camera1", eventCaptor.getValue().getCameraName());
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // A failing mail server must not cost anyone else their notification, and must never cost the
+  // event itself.
+  //
+  // sendUrgentEventMail throws MessagingException, the loop had no try/catch, and @SneakyThrows
+  // rethrows it out of the listener - so ONE unreachable mailbox ended the loop, and because the
+  // save sits after the loop, the FALL was never written to MongoDB either. A transient SMTP
+  // outage silently deleted the safety record of a person falling over.
+  // ---------------------------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("FALL: one user's mail failing does not stop the others being attempted")
+  void fallEvent_oneMailFails_theRemainingUsersAreStillMailed() throws Exception {
+    RawEvent fallEvent = rawEvent(EventNameEnum.FALL, null);
+
+    List<UserResponseDto> dtos = Arrays.asList(
+        userDto("first@example.com"), userDto("second@example.com"), userDto("third@example.com"));
+    List<User> users = Arrays.asList(
+        user("first@example.com"), user("second@example.com"), user("third@example.com"));
+
+    when(userService.getAllUsers()).thenReturn(dtos);
+    when(userResponseDto2UserConverter.convert(dtos)).thenReturn(users);
+
+    // The middle recipient is the one whose mailbox rejects. Middle, not first or last, so that
+    // the test distinguishes "kept going" from "happened to fail on the final iteration".
+    doAnswer(invocation -> {
+      User recipient = invocation.getArgument(0);
+      if ("second@example.com".equals(recipient.getEmail())) {
+        throw new MessagingException("SMTP 421 service not available");
+      }
+      return null;
+    }).when(mailService)
+        .sendUrgentEventMail(any(User.class), any(LocalDateTime.class), anyString());
+
+    rawEventService.listener(fallEvent);
+
+    verify(mailService, times(3))
+        .sendUrgentEventMail(userCaptor.capture(), any(LocalDateTime.class), eq("Camera1"));
+    assertEquals(
+        Arrays.asList("first@example.com", "second@example.com", "third@example.com"),
+        userCaptor.getAllValues().stream().map(User::getEmail).collect(Collectors.toList()),
+        "every user must be attempted; the third proves the loop survived the second");
+
+    // The failure is not swallowed in silence - it is the only trace an operator would ever get.
+    assertEquals(1, logsAt(Level.ERROR).size(), "exactly one ERROR, for the one failed send");
+    assertTrue(logsAt(Level.ERROR).get(0).getFormattedMessage().contains("second@example.com"),
+        "the log must name the recipient that was not reached");
+  }
+
+  @Test
+  @DisplayName("FALL: the event is STILL PERSISTED when every single mail fails")
+  void fallEvent_isPersistedEvenWhenEveryMailFails() throws Exception {
+    // The important half. Notifying is best-effort; recording that a fall happened is not.
+    RawEvent fallEvent = rawEvent(EventNameEnum.FALL, null);
+
+    List<UserResponseDto> dtos = Arrays.asList(
+        userDto("first@example.com"), userDto("second@example.com"));
+    List<User> users = Arrays.asList(user("first@example.com"), user("second@example.com"));
+
+    when(userService.getAllUsers()).thenReturn(dtos);
+    when(userResponseDto2UserConverter.convert(dtos)).thenReturn(users);
+    doThrow(new MessagingException("connection refused"))
+        .when(mailService)
+        .sendUrgentEventMail(any(User.class), any(LocalDateTime.class), anyString());
+
+    rawEventService.listener(fallEvent);
+
+    verify(mailService, times(2))
+        .sendUrgentEventMail(any(User.class), any(LocalDateTime.class), anyString());
+    verify(eventRepository, times(1)).save(eventCaptor.capture());
+    assertEquals(EventNameEnum.FALL.name(), eventCaptor.getValue().getEventType());
+    assertEquals("Camera1", eventCaptor.getValue().getCameraName());
+    assertEquals(2, logsAt(Level.ERROR).size(), "one ERROR per unreachable recipient");
+  }
+
+  @Test
+  @DisplayName("FALL: an UNCHECKED mail failure is isolated too - that is the one a real SMTP outage throws")
+  void fallEvent_uncheckedMailFailure_isAlsoIsolated() throws Exception {
+    // MailService.sendUrgentEventMail declares MessagingException, but the call that actually
+    // talks to the network - JavaMailSender.send - throws org.springframework.mail.MailException,
+    // which is UNCHECKED and therefore absent from the method signature. A catch clause written
+    // against the declared MessagingException alone would still let a refused connection abort
+    // the loop and discard the event, i.e. it would fix the defect only for the failure mode that
+    // does not happen in production. Hence this test, and hence catch(Exception) in the listener.
+    RawEvent fallEvent = rawEvent(EventNameEnum.FALL, null);
+
+    List<UserResponseDto> dtos = Arrays.asList(
+        userDto("first@example.com"), userDto("second@example.com"));
+    List<User> users = Arrays.asList(user("first@example.com"), user("second@example.com"));
+
+    when(userService.getAllUsers()).thenReturn(dtos);
+    when(userResponseDto2UserConverter.convert(dtos)).thenReturn(users);
+    doThrow(new MailSendException("Mail server connection failed"))
+        .when(mailService)
+        .sendUrgentEventMail(any(User.class), any(LocalDateTime.class), anyString());
+
+    rawEventService.listener(fallEvent);
+
+    verify(mailService, times(2))
+        .sendUrgentEventMail(any(User.class), any(LocalDateTime.class), anyString());
+    verify(eventRepository, times(1)).save(eventCaptor.capture());
+    assertEquals(EventNameEnum.FALL.name(), eventCaptor.getValue().getEventType());
   }
 
   @Test
@@ -324,32 +466,104 @@ class RawEventServiceTest {
     verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // The last document shape where "every stored duration is in milliseconds" was not true by
+  // construction.
+  //
+  // The else branch wrote data.getTimePeriod() VERBATIM - un-normalised, and unstamped with a
+  // schemaVersion - for every countable type. EventService divides every stored duration by 1000
+  // on the way out (toWholeSeconds / toWholeSecondsOrNull, which /event/all-events applies to
+  // every row), so a countable event that arrived carrying a raw `5` would have rendered as 0 s
+  // in the grid where the design says the cell must read "-", and the PDF would have printed
+  // "Time Period: 0 s".
+  //
+  // The detector cannot produce one - DetectionEvent.__post_init__ rejects a countable event
+  // carrying a duration - but the topic is unauthenticated and the listener is the boundary.
+  // ---------------------------------------------------------------------------------------------
+
   @Test
-  @DisplayName("unknown eventType: persisted UNCONDITIONALLY via the else branch, threshold ignored")
-  void unknownEventType_isPersistedUnconditionally() {
-    // Nothing validates eventType against EventNameEnum. Anything the Python detector puts on
-    // the topic that is not NO_HELMET/NO_JACKET falls through to the else branch and is stored,
-    // even with a timePeriod far below the threshold that would have rejected a known periodic
-    // event. A later slice deliberately inverts this to reject-by-default.
-    RawEvent event = rawEvent("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF", BigDecimal.ZERO);
+  @DisplayName("countable event carrying a duration: the duration is DISCARDED, the event is kept")
+  void countableEventWithADuration_hasTheDurationDiscarded() {
+    RawEvent event = rawEvent(EventNameEnum.ARMS_UP, new BigDecimal("5"));
 
     rawEventService.listener(event);
 
     verify(eventRepository, times(1)).save(eventCaptor.capture());
-    assertEquals("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF",
-        eventCaptor.getValue().getEventType());
-    verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
+    assertEquals(EventNameEnum.ARMS_UP.name(), eventCaptor.getValue().getEventType());
+    assertNull(eventCaptor.getValue().getTimePeriod(),
+        "a countable event has no duration; storing one asserts a measurement nobody made");
+    assertEquals(1, logsAt(Level.WARN).size(),
+        "the contract violation is worth one WARNING - it means a producer is misbehaving");
   }
 
   @Test
-  @DisplayName("unknown eventType is stored even though no query can ever read it back")
-  void unknownEventType_isWriteOnly() {
-    // EventService only ever queries findAllByEventTypeIn([the five known names], ...), so these
-    // documents accumulate in the "event" collection and are invisible to every endpoint.
-    rawEventService.listener(rawEvent("TYPO_IN_THE_DETECTOR", null));
+  @DisplayName("FALL carrying a duration is still PERSISTED - the duration is dropped, never the event")
+  void fallWithADuration_isStillPersisted() {
+    // Explicitly not "reject the event": discarding a FALL because a field was populated that
+    // should not have been would recreate, by another route, exactly the data loss that the mail
+    // isolation above exists to prevent. The bad field is dropped; the safety record survives.
+    RawEvent event = rawEvent(EventNameEnum.FALL, new BigDecimal("9999"));
+
+    when(userService.getAllUsers()).thenReturn(List.of());
+    when(userResponseDto2UserConverter.convert(List.<UserResponseDto>of())).thenReturn(List.of());
+
+    rawEventService.listener(event);
 
     verify(eventRepository, times(1)).save(eventCaptor.capture());
-    assertEquals("TYPO_IN_THE_DETECTOR", eventCaptor.getValue().getEventType());
+    assertEquals(EventNameEnum.FALL.name(), eventCaptor.getValue().getEventType());
+    assertNull(eventCaptor.getValue().getTimePeriod());
+  }
+
+  @Test
+  @DisplayName("unrecognised eventType: DROPPED with one WARNING, exactly as a null type is")
+  void unknownEventType_isDropped() {
+    // INVERTED. This previously asserted the event WAS saved:
+    //
+    //     verify(eventRepository, times(1)).save(eventCaptor.capture());
+    //     assertEquals("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF",
+    //         eventCaptor.getValue().getEventType());
+    //
+    // and carried the note "A later slice deliberately inverts this to reject-by-default."
+    // This is that slice. Nothing validated eventType against EventNameEnum, so anything the
+    // detector put on the topic fell through to the else branch and was stored - even with a
+    // timePeriod of zero, below the floor that would have rejected a known periodic event.
+    //
+    // Reject-by-default is the correct rule because storing was never useful: see
+    // unknownEventType_isNotStoredWhereNoQueryCanReachIt below.
+    RawEvent event = rawEvent("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF", BigDecimal.ZERO);
+
+    rawEventService.listener(event);
+
+    verify(eventRepository, never()).save(any(Event.class));
+    verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
+
+    // One WARNING, matching how a null eventType is already handled: the drop is a decision the
+    // listener owns, so it is logged once here rather than thrown at the container to retry.
+    assertEquals(1, logsAt(Level.WARN).size(), "exactly one WARNING describing the drop");
+    assertTrue(logsAt(Level.WARN).get(0).getFormattedMessage()
+            .contains("SOMETHING_THE_BACKEND_HAS_NEVER_HEARD_OF"),
+        "the WARNING must name the type that was rejected, or it cannot be acted on");
+  }
+
+  @Test
+  @DisplayName("a detector typo is dropped, not written somewhere no query can ever reach it")
+  void unknownEventType_isNotStoredWhereNoQueryCanReachIt() {
+    // INVERTED. This previously asserted the typo WAS stored:
+    //
+    //     verify(eventRepository, times(1)).save(eventCaptor.capture());
+    //     assertEquals("TYPO_IN_THE_DETECTOR", eventCaptor.getValue().getEventType());
+    //
+    // The reason storing was pointless: EventService only ever queries
+    // findAllByEventTypeIn([the five known names], ...), so a document with any other eventType
+    // could never be read back by any endpoint. It was write-only - it grew the collection and
+    // its indexes, appeared in no chart, no grid and no PDF, and could not even be found to be
+    // deleted. Dropping it loses nothing that was ever retrievable and leaves a log line, which
+    // is strictly more than the silent write left behind.
+    rawEventService.listener(rawEvent("TYPO_IN_THE_DETECTOR", null));
+
+    verify(eventRepository, never()).save(any(Event.class));
+    assertEquals(1, logsAt(Level.WARN).size());
+    assertTrue(logsAt(Level.WARN).get(0).getFormattedMessage().contains("TYPO_IN_THE_DETECTOR"));
   }
 
   @Test

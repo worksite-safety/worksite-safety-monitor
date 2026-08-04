@@ -32,7 +32,6 @@ public class SecurityConfiguration {
 
       "/auth/login",
       "/docs/**",
-      "/mail/**",
   };
   private static final String[] ADMIN_URLS = {
       "/event/countable-events/**",

@@ -3,6 +3,7 @@ package com.graduation.project.engine.event.service;
 import com.graduation.project.engine.core.exception.EntityNotFoundException;
 import com.graduation.project.engine.event.model.EventNameEnum;
 import com.graduation.project.engine.event.model.response.CountableEvents;
+import com.graduation.project.engine.event.model.response.EventResponseDto;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
 import com.graduation.project.engine.event.model.response.PieChartResponseDto;
@@ -33,7 +34,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-import static com.graduation.project.engine.core.exception.constant.ErrorConstant.USER_NOT_FOUND_MESSAGE;
+import static com.graduation.project.engine.core.exception.constant.ErrorConstant.EVENT_NOT_FOUND_MESSAGE;
 import static com.graduation.project.engine.core.exception.constant.ErrorConstant.errorMessageParser;
 
 @Service
@@ -48,12 +49,47 @@ public class EventService {
 
   private final EventRepository eventRepository;
 
-  public List<Event> getAllEvents() {
-    return eventRepository.findAll();
+  /**
+   * Every stored event, as {@link EventResponseDto} - durations in SECONDS.
+   *
+   * <p>This used to be {@code return eventRepository.findAll()}: the MongoDB documents themselves,
+   * serialised straight onto the wire. {@code Event.timePeriod} is milliseconds, so
+   * {@code web/src/pages/Reporting.js} rendered every duration a thousand times too large in a
+   * column headed "Time Period" while the periodic chart beside it, which converts, showed the
+   * same events in seconds. The API contradicted itself.
+   *
+   * <p>The conversion is held here, at the same boundary as {@code calculatePeriodicEvents} and
+   * with the same rounding rule ({@link #toWholeSeconds}: truncation, per event), so the grid and
+   * the chart cannot disagree about the same event. See {@link EventResponseDto} for why the
+   * conversion belongs in a DTO rather than in the entity or the frontend.
+   *
+   * <p>ASSUMPTION, shared with {@code calculatePeriodicEvents}: every stored duration is already
+   * milliseconds. Documents predating {@code PeriodicTimePeriodMigration} hold seconds and would
+   * be divided a second time. Deliberately NOT branched on {@code schemaVersion} here - the
+   * periodic chart does not branch either, and a read path that disagreed with it would reinstate
+   * the very inconsistency this change removes. Running the migration is the precondition for
+   * both.
+   */
+  public List<EventResponseDto> getAllEvents() {
+    return eventRepository.findAll().stream()
+        .map(EventService::toResponseDto)
+        .collect(Collectors.toList());
+  }
+
+  private static EventResponseDto toResponseDto(Event event) {
+    return EventResponseDto.builder()
+        .id(event.getId())
+        .cameraName(event.getCameraName())
+        .confidencePercentage(event.getConfidencePercentage())
+        .eventType(event.getEventType())
+        .startTime(event.getStartTime())
+        .endTime(event.getEndTime())
+        .timePeriod(toWholeSecondsOrNull(event.getTimePeriod()))
+        .build();
   }
   public void deletePeriodicEventById(String eventId) {
     eventRepository.findById(eventId).orElseThrow(
-        () -> new EntityNotFoundException(errorMessageParser(USER_NOT_FOUND_MESSAGE, eventId)));
+        () -> new EntityNotFoundException(errorMessageParser(EVENT_NOT_FOUND_MESSAGE, eventId)));
     eventRepository.deleteById(eventId);
 
   }
@@ -133,6 +169,25 @@ public class EventService {
   }
 
 
+  /**
+   * Renders {@code events} into a PDF held entirely in memory.
+   *
+   * <h2>This method either returns a PDF or throws</h2>
+   *
+   * <p>It used to have a third outcome, and that was the defect. The {@code catch} called
+   * {@code printStackTrace()} and returned the {@link ByteArrayOutputStream} it had been writing
+   * into. Because iText buffers the document until {@link Document#close()} - which the error path
+   * never reaches - the stream came back with ZERO bytes rather than a partial document.
+   * {@code EventController.sendPdfEmail} could not tell the difference, so it attached the empty
+   * byte array, sent it, and answered {@code 200 "Email sent successfully!"}. The operator got a
+   * success toast and an unopenable 0-byte attachment.
+   *
+   * <p>The catch now wraps and rethrows as {@link ReportGenerationException}, so "no report" is a
+   * signal the caller must handle rather than a value it cannot distinguish from success. The
+   * cause is attached, so the diagnosis that used to land on stdout travels with the failure.
+   *
+   * @throws ReportGenerationException if the document cannot be produced, for any reason
+   */
   public ByteArrayOutputStream generateEventsPdf(List<Event> events, Long startDate, Long endDate) {
     ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
 
@@ -171,7 +226,13 @@ public class EventService {
 
         if (EventNameEnum.NO_HELMET.name().equals(event.getEventType()) ||
             EventNameEnum.NO_JACKET.name().equals(event.getEventType())) {
-          table.addCell("Time Period: " + event.getTimePeriod());
+          // SECONDS, via the same truncation the periodic chart and the events grid use. This
+          // printed event.getTimePeriod() verbatim, i.e. the stored MILLISECONDS, so a 5-second
+          // violation reached the operator's inbox as "Time Period: 5000" while the dashboard
+          // they had just been looking at said 5. The unit is spelled out in the cell because
+          // this document is read away from the application, with nothing beside it to compare
+          // against - an unlabelled number here is exactly how the mismatch went unnoticed.
+          table.addCell("Time Period: " + toWholeSeconds(event.getTimePeriod()) + " s");
         }
 
         table.completeRow();
@@ -183,10 +244,10 @@ public class EventService {
 
       return byteArrayOutputStream;
     } catch (Exception e) {
-      e.printStackTrace();
+      throw new ReportGenerationException(
+          "Failed to generate the events PDF for " + events.size() + " event(s) between "
+              + startDate + " and " + endDate, e);
     }
-
-    return byteArrayOutputStream;
   }
 
 
@@ -275,6 +336,20 @@ public class EventService {
       return 0;
     }
     return timePeriodMillis.divide(MILLIS_PER_SECOND, 0, RoundingMode.DOWN).intValue();
+  }
+
+  /**
+   * {@link #toWholeSeconds} for the paths that must PRESERVE the absence of a duration.
+   *
+   * <p>The chart sums durations, so "no duration" and "zero duration" are the same thing there and
+   * {@code toWholeSeconds} collapses null to 0. A row in the events grid is not a sum: FALL,
+   * ARMS_UP and FRONT_BEND have no duration at all, and reporting 0 for them would assert a
+   * zero-second violation that was never measured. The grid renders
+   * {@code row.timePeriod === null ? '-' : row.timePeriod}, so null is what makes the cell read
+   * "-".
+   */
+  private static Integer toWholeSecondsOrNull(BigDecimal timePeriodMillis) {
+    return timePeriodMillis == null ? null : toWholeSeconds(timePeriodMillis);
   }
 
   private PeriodicEvents findPeriodicEventsByDate(List<PeriodicEvents> periodicEventsList,

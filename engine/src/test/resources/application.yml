@@ -15,6 +15,9 @@
 #   event.image.path                -> EventController
 #   event.periodic.min-duration-ms  -> RawEventService
 #   event.periodic.input-unit       -> RawEventService
+#   jwt.secret                      -> JwtService
+#   jwt.expiration-ms               -> JwtService
+#   password-reset.aes-key          -> PasswordService
 spring:
   data:
     mongodb:
@@ -92,6 +95,33 @@ event:
     # and the unit is a boundary concern that never reaches the broker or the mapper.
     input-unit: MILLIS
     min-duration-ms: 3000
+
+jwt:
+  # THE ONLY PLACE A JWT SECRET IS ALLOWED TO HAVE A VALUE IN THIS REPOSITORY.
+  #
+  # src/main/resources/application.yml deliberately reads `${JWT_SECRET}` with NO default, so a
+  # deployment that forgets the environment variable refuses to start rather than signing tokens
+  # with a key that is public knowledge. That guarantee only holds if no default is ever added
+  # "for convenience" - which is exactly what this file exists to make unnecessary.
+  #
+  # Base64 of "test-only-jwt-signing-key-not-a-real-secret-0123456789" (54 bytes, comfortably
+  # over the 256 bits HS256 requires - Keys.hmacShaKeyFor throws WeakKeyException below that).
+  # It is in git on purpose: it signs nothing that exists outside a test JVM.
+  secret: dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS1ub3QtYS1yZWFsLXNlY3JldC0wMTIzNDU2Nzg5
+  # Same 20 minutes production uses. SecurityMatrixTest mints deliberately expired tokens by
+  # backdating them by hand, not by shortening this, so the value can stay realistic.
+  expiration-ms: 1200000
+
+password-reset:
+  # THE ONLY PLACE A PASSWORD-RESET KEY IS ALLOWED TO HAVE A VALUE IN THIS REPOSITORY, for the
+  # same reason as jwt.secret above: src/main/resources/application.yml reads
+  # ${PASSWORD_RESET_AES_KEY} with NO default, so a deployment that forgets the variable refuses
+  # to start rather than minting reset tokens under a key anyone can read.
+  #
+  # Base64 of "dev-only-password-reset-key-32by" (32 bytes -> AES-256). In git on purpose: it
+  # encrypts nothing that exists outside a test JVM. PasswordServiceTest does not use it - that
+  # class supplies its own keys inline, precisely because the key is now an argument.
+  aes-key: ZGV2LW9ubHktcGFzc3dvcmQtcmVzZXQta2V5LTMyYnk=
 
 logging:
   level:

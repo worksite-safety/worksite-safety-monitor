@@ -99,26 +99,28 @@ class EventRepositoryIT extends AbstractIntegrationTest {
   }
 
   /**
-   * IS {@code Between} INCLUSIVE?
+   * IS THE DATE RANGE INCLUSIVE?
    *
    * <p>{@code findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc} is the single query
    * behind every date-range endpoint in this application: the countable chart, the pie chart,
    * the periodic chart, the events grid and the PDF report all funnel through
    * {@code EventService.getAllEventsByEventTypes}.
    *
-   * <p>Spring Data MongoDB's query creator maps {@code BETWEEN} to {@code $gt}/{@code $lt} -
-   * exclusive at BOTH ends. This is the opposite of JPA, where {@code Between} is inclusive, and
-   * it is the kind of difference that survives a framework upgrade unnoticed because nothing
-   * fails; the numbers are just quietly a little too small.
+   * <p>HISTORY - THIS ASSERTION USED TO SAY THE OPPOSITE. The method was a DERIVED query whose
+   * name contained {@code Between}, and Spring Data MongoDB's query creator maps {@code BETWEEN}
+   * to {@code $gt}/{@code $lt} - exclusive at BOTH ends, the opposite of JPA. This test measured
+   * that and pinned it: an event whose {@code startTime} equalled the requested {@code startDate}
+   * or {@code endDate} to the millisecond was dropped, from every chart, silently. The UI sends
+   * day boundaries, so it lost events at exactly midnight.
    *
-   * <p>Consequence for the dashboard: an event whose {@code startTime} equals the requested
-   * {@code startDate} or {@code endDate} to the millisecond is dropped. The UI sends day
-   * boundaries, so in practice this loses events at exactly midnight - rare, but silent, and
-   * every chart inherits it.
+   * <p>The repository now declares the range explicitly with {@code $gte}/{@code $lte} (see
+   * {@code EventRepository}), so a requested range means the closed interval a user reading
+   * "14.11.2023 - 15.11.2023" would expect. This test is the inversion of the old one and is the
+   * reason the fix cannot regress: nothing else in the stack can observe the operators.
    */
   @Test
-  @DisplayName("Between is EXCLUSIVE at both ends: events exactly on the boundaries are dropped")
-  void betweenIsExclusiveAtBothEnds() {
+  @DisplayName("the date range is INCLUSIVE at both ends: events exactly on the boundaries are kept")
+  void rangeIsInclusiveAtBothEnds() {
     long startDate = 1_700_000_000_000L;
     long endDate = startDate + 86_400_000L;
 
@@ -130,26 +132,25 @@ class EventRepositoryIT extends AbstractIntegrationTest {
     List<Event> found = eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
         List.of(EventNameEnum.FALL.name()), startDate, endDate);
 
-    System.out.println("[EventRepositoryIT] Between(" + startDate + ", " + endDate + ") returned "
+    System.out.println("[EventRepositoryIT] range(" + startDate + ", " + endDate + ") returned "
         + found.stream().map(Event::getCameraName).toList());
 
     assertThat(found).extracting(Event::getCameraName)
-        .containsExactly("just-after-start", "just-before-end");
-
-    assertThat(found).extracting(Event::getCameraName)
-        .doesNotContain("at-start", "at-end");
-    assertThat(found).hasSize(2);
+        .containsExactly("at-start", "just-after-start", "just-before-end", "at-end");
+    assertThat(found).hasSize(4);
   }
 
   /**
-   * The same fact stated from the other side, so the intent survives a careless "fix" of the
-   * test above: a caller who wants an inclusive range must widen the bounds by one millisecond.
-   * That is the workaround any migration or endpoint change should use until the repository
-   * method itself is changed to explicit {@code $gte}/{@code $lte}.
+   * Widening the bounds by one millisecond was the WORKAROUND for the exclusive range. It still
+   * returns everything, of course - but it must no longer be necessary, and the second assertion
+   * is what says so: the widened result and the exact result are now the same list.
+   *
+   * <p>Kept rather than deleted because a caller somewhere may still be widening out of habit,
+   * and this pins that doing so is now a no-op rather than a silent one-millisecond overreach.
    */
   @Test
-  @DisplayName("widening the bounds by 1 ms is what makes the range inclusive")
-  void wideningTheBoundsByOneMillisecondIncludesTheBoundaries() {
+  @DisplayName("widening the bounds by 1 ms is now redundant, not required")
+  void wideningTheBoundsByOneMillisecondIsNowRedundant() {
     long startDate = 1_700_000_000_000L;
     long endDate = startDate + 86_400_000L;
 
@@ -158,22 +159,30 @@ class EventRepositoryIT extends AbstractIntegrationTest {
     saveFallAt("just-before-end", endDate - 1);
     saveFallAt("at-end", endDate);
 
-    List<Event> found = eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+    List<Event> widened = eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
         List.of(EventNameEnum.FALL.name()), startDate - 1, endDate + 1);
+    List<Event> exact = eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+        List.of(EventNameEnum.FALL.name()), startDate, endDate);
 
-    assertThat(found).extracting(Event::getCameraName)
+    assertThat(widened).extracting(Event::getCameraName)
         .containsExactly("at-start", "just-after-start", "just-before-end", "at-end");
+    assertThat(exact).extracting(Event::getCameraName)
+        .isEqualTo(widened.stream().map(Event::getCameraName).toList());
   }
 
   /**
-   * Pins the operators rather than just the outcome, by running the two candidate raw queries
-   * side by side. The derived method must agree with {@code $gt}/{@code $lt} and disagree with
-   * {@code $gte}/{@code $lte}; if a future Spring Data version switches, this fails loudly
-   * instead of merely changing a count somewhere in a chart.
+   * Pins the OPERATORS rather than just the outcome, by running the two candidate raw queries
+   * side by side. The repository method must agree with {@code $gte}/{@code $lte} and disagree
+   * with {@code $gt}/{@code $lt}; if the declaration is ever reverted to a derived
+   * {@code ...Between...} name, this fails loudly instead of merely changing a count somewhere in
+   * a chart.
+   *
+   * <p>This assertion was previously the exact inverse ({@code derived == exclusive},
+   * {@code derived != inclusive}) - it is the second place the old exclusive behaviour was pinned.
    */
   @Test
-  @DisplayName("the derived Between matches raw $gt/$lt and NOT raw $gte/$lte")
-  void derivedBetweenMatchesGtLtNotGteLte() {
+  @DisplayName("the range query matches raw $gte/$lte and NOT raw $gt/$lt")
+  void rangeQueryMatchesGteLteNotGtLt() {
     long startDate = 1_700_000_000_000L;
     long endDate = startDate + 86_400_000L;
 
@@ -190,13 +199,66 @@ class EventRepositoryIT extends AbstractIntegrationTest {
     List<String> exclusive = rawStartTimeQuery("$gt", startDate, "$lt", endDate);
     List<String> inclusive = rawStartTimeQuery("$gte", startDate, "$lte", endDate);
 
-    System.out.println("[EventRepositoryIT] derived  = " + derived);
-    System.out.println("[EventRepositoryIT] $gt/$lt  = " + exclusive);
-    System.out.println("[EventRepositoryIT] $gte/$lte= " + inclusive);
+    System.out.println("[EventRepositoryIT] repository = " + derived);
+    System.out.println("[EventRepositoryIT] $gt/$lt    = " + exclusive);
+    System.out.println("[EventRepositoryIT] $gte/$lte  = " + inclusive);
 
-    assertThat(derived).isEqualTo(exclusive);
-    assertThat(derived).isNotEqualTo(inclusive);
+    assertThat(derived).isEqualTo(inclusive);
+    assertThat(derived).isNotEqualTo(exclusive);
     assertThat(inclusive).hasSize(4);
+  }
+
+  /**
+   * The ordering contract, asserted independently of the range. The method name still ends in
+   * {@code OrderByStartTimeAsc} but the sort no longer comes from the derived name - it is
+   * declared on the {@code @Query} - so it needs its own test rather than riding on the range
+   * tests' {@code containsExactly}.
+   */
+  @Test
+  @DisplayName("results are still sorted by startTime ascending, from the @Query sort")
+  void resultsAreSortedByStartTimeAscending() {
+    long base = 1_700_000_000_000L;
+
+    saveFallAt("third", base + 3000);
+    saveFallAt("first", base + 1000);
+    saveFallAt("fourth", base + 4000);
+    saveFallAt("second", base + 2000);
+
+    List<Event> found = eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+        List.of(EventNameEnum.FALL.name()), base, base + 10_000);
+
+    assertThat(found).extracting(Event::getCameraName)
+        .containsExactly("first", "second", "third", "fourth");
+  }
+
+  /**
+   * The {@code eventType $in} half of the filter, which the {@code @Query} now spells out by hand.
+   * Without this, a typo in the JSON string that dropped the type filter entirely would still pass
+   * every other test in this class, because they only ever save FALL documents.
+   */
+  @Test
+  @DisplayName("the eventType $in filter still excludes types that were not asked for")
+  void eventTypeFilterStillApplies() {
+    long base = 1_700_000_000_000L;
+
+    saveFallAt("a-fall", base + 1000);
+    eventRepository.save(Event.builder()
+        .cameraName("a-no-helmet")
+        .confidencePercentage(new BigDecimal("90"))
+        .eventType(EventNameEnum.NO_HELMET.name())
+        .isProcessed("false")
+        .timePeriod(new BigDecimal("5000"))
+        .startTime(base + 2000)
+        .endTime(base + 2000)
+        .build());
+
+    assertThat(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+        List.of(EventNameEnum.FALL.name()), base, base + 10_000))
+        .extracting(Event::getCameraName).containsExactly("a-fall");
+
+    assertThat(eventRepository.findAllByEventTypeInAndStartTimeBetweenOrderByStartTimeAsc(
+        List.of(EventNameEnum.FALL.name(), EventNameEnum.NO_HELMET.name()), base, base + 10_000))
+        .extracting(Event::getCameraName).containsExactly("a-fall", "a-no-helmet");
   }
 
   private List<String> rawStartTimeQuery(String lowerOperator, long lower, String upperOperator,

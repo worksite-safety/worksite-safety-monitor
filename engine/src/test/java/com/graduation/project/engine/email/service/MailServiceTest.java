@@ -12,10 +12,14 @@ import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import java.io.InputStream;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -98,16 +102,55 @@ class MailServiceTest {
   }
 
   @Test
-  @DisplayName("forgot-password mail: the reset link is http://localhost:3000/change-password?token=<ciphertext>")
+  @DisplayName("forgot-password mail: the reset link URL-ENCODES the token into the query string")
   void forgotPasswordMail_resetLinkShape() throws Exception {
     String token = "MZQJDqc5XqIXLMzs1s0xH5vuYocPc2b4HixySp4mBJQ=";
 
     mailService.sendForgotPasswordEmail(user("Ada", "Lovelace", "ada@example.com"), token);
 
-    // Hard-coded host and port, and the raw AES ciphertext is dropped into the query string
-    // unescaped (note the trailing '=' padding). Both are pinned as-is.
+    // INVERTED. This previously asserted the RAW token was interpolated:
+    //
+    //     .anyMatch(part -> part.contains("http://localhost:3000/change-password?token=" + token));
+    //
+    // with the note "the raw AES ciphertext is dropped into the query string unescaped (note the
+    // trailing '=' padding). Both are pinned as-is." The host and port are still hard-coded and
+    // still pinned; only the escaping changed. The '=' padding is now %3D.
     assertThat(textPartsOf(capturedMessage()))
-        .anyMatch(part -> part.contains("http://localhost:3000/change-password?token=" + token));
+        .anyMatch(part -> part.contains(
+            "http://localhost:3000/change-password?token=MZQJDqc5XqIXLMzs1s0xH5vuYocPc2b4HixySp4mBJQ%3D"));
+  }
+
+  @Test
+  @DisplayName("forgot-password mail: a '+' in the token is escaped, so it cannot arrive as a space")
+  void forgotPasswordMail_plusInTokenIsEscaped() throws Exception {
+    // A genuine ciphertext from this exact key, for the address user3@example.com. '+' is an
+    // ordinary character of the standard Base64 alphabet and it is also the query-string encoding
+    // of a space, so interpolating it raw makes the two indistinguishable at the receiver.
+    // Measured over 20 000 synthetic addresses through the real PasswordService: 49.0% of tokens
+    // contain at least one '+'. This is the coin-flip that decides whether a reset link works.
+    String token = "LjjG0G+jeLbYbdb2MWYddDYBCiaC4P1lQvk3g0V2Q58=";
+
+    mailService.sendForgotPasswordEmail(user("Ada", "Lovelace", "ada@example.com"), token);
+
+    List<String> parts = textPartsOf(capturedMessage());
+    assertThat(parts).anyMatch(part -> part.contains(
+        "?token=LjjG0G%2BjeLbYbdb2MWYddDYBCiaC4P1lQvk3g0V2Q58%3D"));
+    assertThat(parts).noneMatch(part -> part.contains("?token=LjjG0G+"));
+  }
+
+  @Test
+  @DisplayName("forgot-password mail: the emitted link decodes back to EXACTLY the token handed in")
+  void forgotPasswordMail_linkDecodesBackToTheOriginalToken() throws Exception {
+    // The contract that actually matters, stated end to end rather than as a string shape: what a
+    // standards-compliant reader pulls out of the query string must be byte-for-byte what
+    // UserService encrypted, because PasswordService.decrypt gets no second chance at it. Every
+    // character Base64 can produce is exercised, '+' and '/' included.
+    String token = "LjjG0G+jeL/Ybdb2MWYddDYBCiaC4P1lQvk3g0V2Q58=";
+
+    mailService.sendForgotPasswordEmail(user("Ada", "Lovelace", "ada@example.com"), token);
+
+    assertThat(URLDecoder.decode(tokenQueryParameterOf(capturedMessage()), StandardCharsets.UTF_8))
+        .isEqualTo(token);
   }
 
   @Test
@@ -161,6 +204,19 @@ class MailServiceTest {
         .email(email)
         .role(Role.ADMIN)
         .build();
+  }
+
+  /**
+   * The raw, still-encoded value of the {@code token} query parameter in the reset link, pulled
+   * out of the {@code href}. Deliberately not a snapshot of the surrounding HTML - only the one
+   * value whose exact bytes are a contract.
+   */
+  private static String tokenQueryParameterOf(MimeMessage message) throws Exception {
+    Matcher matcher = Pattern
+        .compile("href='http://localhost:3000/change-password\\?token=([^']*)'")
+        .matcher(String.join("\n", textPartsOf(message)));
+    assertThat(matcher.find()).as("the mail must contain a reset link").isTrue();
+    return matcher.group(1);
   }
 
   /** Every textual part of the (multipart) message, decoded. */

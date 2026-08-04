@@ -1,7 +1,6 @@
 package com.graduation.project.engine.event.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.eq;
@@ -9,13 +8,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.graduation.project.engine.core.exception.EntityNotFoundException;
 import com.graduation.project.engine.event.model.Event;
 import com.graduation.project.engine.event.model.EventNameEnum;
 import com.graduation.project.engine.event.model.response.CountableEvents;
+import com.graduation.project.engine.event.model.response.EventResponseDto;
 import com.graduation.project.engine.event.model.response.PeriodicEvents;
 import com.graduation.project.engine.event.model.response.PieChartResponseDto;
 import com.graduation.project.engine.event.repository.EventRepository;
+import com.itextpdf.text.pdf.PdfReader;
+import com.itextpdf.text.pdf.parser.PdfTextExtractor;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -429,13 +432,91 @@ class EventServiceTest {
   // getAllEvents / getAllEventsByDateIntervals / deletePeriodicEventById
   // ---------------------------------------------------------------------------------------------
 
+  /**
+   * THE ASSERTION THIS REPLACES was {@code assertThat(eventService.getAllEvents()).isSameAs(all)}
+   * - straight delegation, the repository's entities handed to the client untouched. It had to
+   * change because it pinned the second half of the millisecond leak: {@code /event/all-events}
+   * served {@code Event} documents, whose {@code timePeriod} is milliseconds, into a grid column
+   * headed "Time Period" that the rest of the API expresses in seconds.
+   */
   @Test
-  @DisplayName("getAllEvents: straight delegation to findAll()")
-  void getAllEvents_delegatesToFindAll() {
-    List<Event> all = List.of(countable(EventNameEnum.FALL, utc(2023, 11, 14, 8, 0)));
-    when(eventRepository.findAll()).thenReturn(all);
+  @DisplayName("getAllEvents: maps to EventResponseDto and converts timePeriod ms -> SECONDS")
+  void getAllEvents_mapsToResponseDtoInSeconds() {
+    Event periodic = periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5000");
+    periodic.setCameraName("Camera7");
+    periodic.setEndTime(utc(2023, 11, 14, 8, 5));
+    when(eventRepository.findAll()).thenReturn(List.of(periodic));
 
-    assertThat(eventService.getAllEvents()).isSameAs(all);
+    List<EventResponseDto> result = eventService.getAllEvents();
+
+    assertThat(result).singleElement().satisfies(dto -> {
+      assertThat(dto.getTimePeriod()).isEqualTo(5);
+      assertThat(dto.getId()).isEqualTo(periodic.getId());
+      assertThat(dto.getEventType()).isEqualTo("NO_HELMET");
+      assertThat(dto.getCameraName()).isEqualTo("Camera7");
+      assertThat(dto.getStartTime()).isEqualTo(periodic.getStartTime());
+      assertThat(dto.getEndTime()).isEqualTo(periodic.getEndTime());
+      assertThat(dto.getConfidencePercentage()).isEqualByComparingTo(BigDecimal.valueOf(90));
+    });
+  }
+
+  @Test
+  @DisplayName("getAllEvents: a countable event's timePeriod stays NULL - not 0")
+  void getAllEvents_nullTimePeriodStaysNull() {
+    // The grid renders `row.timePeriod === null ? '-' : row.timePeriod`. A 0 would claim a
+    // zero-second violation for an event type that never carries a duration.
+    when(eventRepository.findAll())
+        .thenReturn(List.of(countable(EventNameEnum.FALL, utc(2023, 11, 14, 8, 0))));
+
+    assertThat(eventService.getAllEvents()).singleElement()
+        .extracting(EventResponseDto::getTimePeriod)
+        .isNull();
+  }
+
+  @Test
+  @DisplayName("getAllEvents: truncates per event, exactly as the periodic chart does")
+  void getAllEvents_truncatesPerEventLikeTheChart() {
+    // Same rounding rule as calculatePeriodicEvents, so the grid and the chart cannot disagree
+    // about the same event: 5900 ms is 5 s in both.
+    when(eventRepository.findAll()).thenReturn(List.of(
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5900"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 9, 0), "2999"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 10, 0), "999")));
+
+    assertThat(eventService.getAllEvents()).extracting(EventResponseDto::getTimePeriod)
+        .containsExactly(5, 2, 0);
+  }
+
+  @Test
+  @DisplayName("getAllEvents: the payload does NOT carry schemaVersion or isProcessed")
+  void getAllEvents_doesNotLeakStorageFields() throws Exception {
+    // schemaVersion records which unit the STORED value is in. Once the DTO has converted to
+    // seconds, shipping it alongside would assert that the number is milliseconds - the payload
+    // would contradict itself. isProcessed is an ingest flag no consumer reads.
+    Event stored = periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 8, 0), "5000");
+    stored.setSchemaVersion(Event.SCHEMA_VERSION_MILLIS);
+    stored.setIsProcessed("false");
+    when(eventRepository.findAll()).thenReturn(List.of(stored));
+
+    String json = new ObjectMapper()
+        .writeValueAsString(eventService.getAllEvents().get(0));
+
+    assertThat(json).doesNotContain("schemaVersion");
+    assertThat(json).doesNotContain("isProcessed");
+    // ...and timePeriod is present as an explicit key, because `row.timePeriod === null` in the
+    // grid is a strict comparison that an absent key would fail.
+    assertThat(json).contains("\"timePeriod\":5");
+  }
+
+  @Test
+  @DisplayName("getAllEvents: a null timePeriod serialises as an explicit JSON null, not an absent key")
+  void getAllEvents_nullTimePeriodSerialisesAsExplicitNull() throws Exception {
+    when(eventRepository.findAll())
+        .thenReturn(List.of(countable(EventNameEnum.FALL, utc(2023, 11, 14, 8, 0))));
+
+    String json = new ObjectMapper().writeValueAsString(eventService.getAllEvents().get(0));
+
+    assertThat(json).contains("\"timePeriod\":null");
   }
 
   @Test
@@ -453,14 +534,18 @@ class EventServiceTest {
   }
 
   @Test
-  @DisplayName("delete: unknown id throws EntityNotFoundException whose message says \"User Not Found\"")
-  void delete_unknownId_throwsEntityNotFoundWithUserWording() {
+  @DisplayName("delete: unknown id throws EntityNotFoundException whose message names the EVENT")
+  void delete_unknownId_throwsEntityNotFoundWithEventWording() {
     when(eventRepository.findById("evt-404")).thenReturn(Optional.empty());
 
-    // The message constant is USER_NOT_FOUND_MESSAGE even though the entity is an Event.
+    // This assertion used to read "User Not Found: evt-404": the service reused
+    // USER_NOT_FOUND_MESSAGE for an Event lookup, so deleting a row from the events grid told the
+    // client - and the operator reading the toast - that a USER did not exist. The id in the
+    // message is an event id, so the two together are actively misleading: they invite someone to
+    // go looking in the wrong collection.
     assertThatThrownBy(() -> eventService.deletePeriodicEventById("evt-404"))
         .isInstanceOf(EntityNotFoundException.class)
-        .hasMessage("User Not Found: evt-404");
+        .hasMessage("Event Not Found: evt-404");
 
     verify(eventRepository, never()).deleteById("evt-404");
   }
@@ -504,20 +589,66 @@ class EventServiceTest {
   }
 
   @Test
-  @DisplayName("pdf: DEFECT - a bad event swallows the exception and returns a ZERO-BYTE stream")
-  void pdf_swallowsExceptionAndReturnsEmptyStream() {
-    // startTime == null makes getFormattedDateTime NPE inside the try block. The catch only
-    // prints the stack trace, so the caller (EventController.sendPdfEmail) cannot tell that
-    // anything went wrong: it mails a 0-byte "events_data.pdf" and answers
-    // "Email sent successfully!".
+  @DisplayName("pdf: a bad event THROWS ReportGenerationException instead of returning 0 bytes")
+  void pdf_brokenEventThrowsReportGenerationException() {
+    // startTime == null makes getFormattedDateTime NPE inside the try block.
+    //
+    // THIS ASSERTION IS THE INVERSE OF THE ONE IT REPLACES. The old test pinned the defect: it
+    // asserted .doesNotThrowAnyException() and that the returned stream was EMPTY. iText buffers
+    // the document until close(), which the error path never reached, so the caller received zero
+    // bytes and no signal - EventController.sendPdfEmail mailed them and replied
+    // "Email sent successfully!". A caller that cannot distinguish a report from no report cannot
+    // tell the truth to the user, so the swallow is the defect and returning normally is the
+    // behaviour that had to go.
     Event broken = Event.builder().eventType(EventNameEnum.FALL.name()).startTime(null).build();
-    ByteArrayOutputStream[] captured = new ByteArrayOutputStream[1];
 
-    assertThatCode(() -> captured[0] = eventService.generateEventsPdf(List.of(broken), START, END))
-        .doesNotThrowAnyException();
+    assertThatThrownBy(() -> eventService.generateEventsPdf(List.of(broken), START, END))
+        .isInstanceOf(ReportGenerationException.class)
+        .hasMessageContaining("Failed to generate the events PDF")
+        // The cause is kept: the stack trace that used to go to stdout is now attached to the
+        // exception the caller sees, so nothing that was diagnosable before is lost.
+        .hasCauseInstanceOf(NullPointerException.class);
+  }
 
-    // Not a partial PDF - iText buffers everything until close(), which is never reached.
-    assertThat(captured[0].toByteArray()).isEmpty();
+  @Test
+  @DisplayName("pdf: the Details column prints SECONDS, not the stored milliseconds")
+  void pdf_periodicDurationIsPrintedInSeconds() throws Exception {
+    // The emailed report was the other place the storage unit leaked: it printed
+    // event.getTimePeriod() verbatim, so a 5-second violation read "Time Period: 5000" while the
+    // dashboard next to it said 5.
+    List<Event> events = List.of(
+        periodic(EventNameEnum.NO_HELMET, utc(2023, 11, 14, 9, 0), "5000"),
+        periodic(EventNameEnum.NO_JACKET, utc(2023, 11, 14, 10, 0), "2999"));
+
+    String text = pdfTextOf(eventService.generateEventsPdf(events, START, END));
+
+    assertThat(text).contains("Time Period: 5 s");
+    // Truncated per event, the same rule as the periodic chart and the events grid.
+    assertThat(text).contains("Time Period: 2 s");
+    assertThat(text).doesNotContain("5000");
+    assertThat(text).doesNotContain("2999");
+  }
+
+  @Test
+  @DisplayName("pdf: a countable event has no Details cell at all - no bogus 0")
+  void pdf_countableEventHasNoDuration() {
+    String text = pdfTextOf(eventService.generateEventsPdf(
+        List.of(countable(EventNameEnum.FALL, utc(2023, 11, 14, 8, 0))), START, END));
+
+    assertThat(text).contains("FALL");
+    assertThat(text).doesNotContain("Time Period:");
+  }
+
+  @Test
+  @DisplayName("pdf: a stream is never returned empty - success implies bytes")
+  void pdf_successAlwaysImpliesNonEmptyBytes() {
+    // The contract EventController relies on: generateEventsPdf either returns a real PDF or
+    // throws. There is no third outcome, and this is the assertion that says so for the two
+    // inputs that do succeed.
+    assertThat(eventService.generateEventsPdf(List.of(), START, END).toByteArray()).isNotEmpty();
+    assertThat(eventService.generateEventsPdf(
+        List.of(countable(EventNameEnum.FALL, utc(2023, 11, 14, 8, 0))), START, END)
+        .toByteArray()).isNotEmpty();
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -552,5 +683,24 @@ class EventServiceTest {
     Event event = countable(type, startTime);
     event.setTimePeriod(new BigDecimal(timePeriod));
     return event;
+  }
+
+  /**
+   * Reads the text back out of a generated PDF. iText embeds a creation timestamp, so the bytes
+   * are not stable and cannot be snapshotted - but the rendered text is, and it is the only way
+   * to assert what the operator actually reads in the emailed report.
+   */
+  private static String pdfTextOf(ByteArrayOutputStream pdf) {
+    try {
+      PdfReader reader = new PdfReader(pdf.toByteArray());
+      StringBuilder text = new StringBuilder();
+      for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+        text.append(PdfTextExtractor.getTextFromPage(reader, page));
+      }
+      reader.close();
+      return text.toString();
+    } catch (Exception e) {
+      throw new IllegalStateException("could not read the generated PDF back", e);
+    }
   }
 }

@@ -149,6 +149,14 @@ public class UserService {
   @SneakyThrows
   public void changePassword(ChangePasswordRequestDto request) {
 
+    // PasswordService.decrypt refuses a blank token, but on its own that would surface as a raw
+    // IllegalArgumentException travelling out through this method's @SneakyThrows, and
+    // GenericExceptionHandler maps no such type - so a request that simply forgot its token would
+    // answer 500. It is a bad request, and it is cheap to say so before decrypting anything.
+    if (request.getSecretKey() == null || request.getSecretKey().isBlank()) {
+      throw new BadRequestException("Password reset token is missing");
+    }
+
     String email = passwordService.decrypt(request.getSecretKey());
 
     User user = userRepository.findByEmail(email).orElseThrow(

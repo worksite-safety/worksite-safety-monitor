@@ -6,12 +6,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.graduation.project.engine.user.model.Role;
 import com.graduation.project.engine.user.model.User;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.DecodingException;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import io.jsonwebtoken.security.WeakKeyException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.Key;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -21,30 +29,33 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UserDetails;
 
 /**
- * Characterization tests for {@link JwtService}.
+ * Unit tests for {@link JwtService}.
  *
- * <p><b>DEFECT PINNED HERE, NOT FIXED.</b> {@code JwtService.SECRET_KEY} is the literal string
- * {@code "${JWT_SECRET}"} - a placeholder left behind by a history rewrite, not a {@code @Value}
- * binding (the field is a {@code private static final String}, so it is a compile-time constant
- * and is inlined at its use site; no amount of reflection can rebind it).
- * {@code Decoders.BASE64.decode("${JWT_SECRET}")} therefore throws, and it throws in
- * {@code getSignInKey()}, which is the FIRST thing every public method reaches.
+ * <p>This class used to be a characterization suite that pinned the OPPOSITE of everything below:
+ * {@code SECRET_KEY} was the literal string {@code "${JWT_SECRET}"} left behind by a history
+ * rewrite, so {@code Decoders.BASE64.decode(...)} threw on the first line of {@code getSignInKey()}
+ * and every public method on this class threw {@link io.jsonwebtoken.io.DecodingException} before
+ * it looked at its arguments. Those assertions have been inverted, not deleted - each one now
+ * asserts the behaviour the method was always meant to have.
  *
- * <p>Consequences, all pinned below: no token can be issued, no token can be read, and
- * {@link JwtAuthenticationFilter} explodes on any request that carries an
- * {@code Authorization: Bearer} header (see {@code SecurityMatrixTest}).
+ * <p>The secret is a constructor argument now, which is what makes this class testable at all: a
+ * {@code private static final String} is a compile-time constant, javac inlines it at the use site,
+ * and neither {@code @Value} nor reflection can rebind it after the fact.
  *
- * <p>Because generation is unreachable, the token's own {@code authorities} claim shape and its
- * 20-minute expiry cannot be asserted through {@code JwtService}'s public API at all. The last
- * test below pins the {@code authorities} rendering through the same jjwt + Jackson stack as a
- * deliberate PROXY canary, so a jjwt or Spring Security upgrade that changes how
- * {@code SimpleGrantedAuthority} serialises still trips a test. The 20-minute expiry
- * ({@code 1000 * 60 * 20} in {@code generateToken}) is a literal in production code and has no
- * reachable assertion; it is called out in the slice report instead.
+ * <p>The exception-type tests near the bottom are not decoration. They are the contract
+ * {@link JwtAuthenticationFilter} has to catch: a token that cannot be verified must become a 403,
+ * and the filter can only do that if it knows precisely which throwables to expect - including the
+ * one case where jjwt raises a bare {@link IllegalArgumentException} instead of a
+ * {@link io.jsonwebtoken.JwtException}.
  */
 class JwtServiceTest {
 
-  private final JwtService jwtService = new JwtService();
+  /** Base64 of a 54-byte string; HS256 requires at least 32 bytes of key material. */
+  private static final String SECRET =
+      "dGVzdC1vbmx5LWp3dC1zaWduaW5nLWtleS1ub3QtYS1yZWFsLXNlY3JldC0wMTIzNDU2Nzg5";
+  private static final long EXPIRY_MS = 1000L * 60 * 20;
+
+  private final JwtService jwtService = new JwtService(SECRET, EXPIRY_MS);
 
   private static final UserDetails ADMIN = User.builder()
       .email("aziz@example.com")
@@ -52,97 +63,225 @@ class JwtServiceTest {
       .role(Role.ADMIN)
       .build();
 
-  /** A syntactically well-formed-looking JWT. It is never actually parsed - the key fails first. */
-  private static final String ANY_TOKEN =
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhQGIuY29tIn0.c2lnbmF0dXJl";
+  // -------------------------------------------------------------------------------------------
+  // Round trip
+  // -------------------------------------------------------------------------------------------
 
   @Test
-  @DisplayName("generateToken(userDetails) throws DecodingException - the secret is not base64")
-  void generateToken_throwsDecodingException() {
-    assertThatThrownBy(() -> jwtService.generateToken(ADMIN))
-        .isInstanceOf(DecodingException.class)
-        .hasMessage("Illegal base64 character: '_'");
+  @DisplayName("generateToken then extractUsername round-trips the email")
+  void generateToken_thenExtractUsername_roundTripsTheEmail() {
+    String token = jwtService.generateToken(ADMIN);
+
+    assertThat(jwtService.extractUsername(token)).isEqualTo("aziz@example.com");
   }
 
   @Test
-  @DisplayName("generateToken(extraClaims, userDetails) throws DecodingException too")
-  void generateTokenWithExtraClaims_throwsDecodingException() {
-    assertThatThrownBy(() -> jwtService.generateToken(Map.of("k", "v"), ADMIN))
-        .isInstanceOf(DecodingException.class);
+  @DisplayName("generateToken(extraClaims, ...) carries the extra claims through the round trip")
+  void generateTokenWithExtraClaims_carriesThemThrough() {
+    String token = jwtService.generateToken(Map.of("k", "v"), ADMIN);
+
+    // Bound to Object first: inlining this makes extractClaim's <T> inferable only from the
+    // assertThat overload set, and Assertions.assertThat(Predicate) vs (IntPredicate) is ambiguous.
+    Object extra = jwtService.extractClaim(token, claims -> claims.get("k"));
+    assertThat(extra).isEqualTo("v");
+    // setClaims() REPLACES the claim map, so the subject and authorities must survive being set
+    // after it. They do, because generateToken sets them afterwards - worth pinning, since
+    // reordering those builder calls would silently produce a subject-less token.
+    assertThat(jwtService.extractUsername(token)).isEqualTo("aziz@example.com");
   }
 
   @Test
-  @DisplayName("extractUsername throws DecodingException for any token")
-  void extractUsername_throwsDecodingException() {
-    assertThatThrownBy(() -> jwtService.extractUsername(ANY_TOKEN))
-        .isInstanceOf(DecodingException.class)
-        .hasMessage("Illegal base64 character: '_'");
+  @DisplayName("extractClaim applies the resolver to the parsed claims")
+  void extractClaim_appliesTheResolver() {
+    String token = jwtService.generateToken(ADMIN);
+
+    assertThat(jwtService.extractClaim(token, Claims::getSubject)).isEqualTo("aziz@example.com");
   }
 
   @Test
-  @DisplayName("extractUsername(null) throws DecodingException, NOT a NullPointerException")
-  void extractUsername_nullToken_stillFailsOnTheKeyFirst() {
-    // The key is built before the token is looked at, so the token argument never matters.
-    // This is why JwtAuthenticationFilter cannot even reject a malformed Bearer header cleanly.
-    assertThatThrownBy(() -> jwtService.extractUsername(null))
-        .isInstanceOf(DecodingException.class);
+  @DisplayName("isTokenValid is true for a fresh token belonging to that user")
+  void isTokenValid_trueForOwnFreshToken() {
+    assertThat(jwtService.isTokenValid(jwtService.generateToken(ADMIN), ADMIN)).isTrue();
   }
 
   @Test
-  @DisplayName("extractClaim throws DecodingException before the resolver is ever applied")
-  void extractClaim_throwsDecodingException() {
-    assertThatThrownBy(() -> jwtService.extractClaim(ANY_TOKEN, Claims::getSubject))
-        .isInstanceOf(DecodingException.class);
+  @DisplayName("isTokenValid is false when the subject is a different user")
+  void isTokenValid_falseForSomeoneElsesToken() {
+    UserDetails other = User.builder().email("someone.else@example.com")
+        .password("irrelevant").role(Role.ADMIN).build();
+
+    assertThat(jwtService.isTokenValid(jwtService.generateToken(ADMIN), other)).isFalse();
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Expiry
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("exp - iat equals the configured expiry exactly")
+  void expiryWindow_matchesTheConfiguredValue() {
+    String token = jwtService.generateToken(ADMIN);
+
+    Date issuedAt = jwtService.extractClaim(token, Claims::getIssuedAt);
+    Date expiration = jwtService.extractClaim(token, Claims::getExpiration);
+
+    // JWT iat/exp are whole seconds, so this can only be exact if generateToken reads the clock
+    // ONCE. Reading System.currentTimeMillis() separately for iat and exp makes this assertion
+    // fail roughly one run in a thousand, when the millisecond ticks between the two reads.
+    assertThat(expiration.getTime() - issuedAt.getTime()).isEqualTo(EXPIRY_MS);
   }
 
   @Test
-  @DisplayName("isTokenValid throws DecodingException rather than returning false")
-  void isTokenValid_throwsDecodingException() {
-    // Note it THROWS - callers that expect a boolean (JwtAuthenticationFilter) get an
-    // unchecked exception propagated out of the servlet filter chain instead.
-    assertThatThrownBy(() -> jwtService.isTokenValid(ANY_TOKEN, ADMIN))
-        .isInstanceOf(DecodingException.class);
+  @DisplayName("the expiry is configuration, not a literal: a different value produces a different window")
+  void expiryWindow_isConfigurable() {
+    JwtService fiveMinutes = new JwtService(SECRET, 1000L * 60 * 5);
+    String token = fiveMinutes.generateToken(ADMIN);
+
+    Date issuedAt = fiveMinutes.extractClaim(token, Claims::getIssuedAt);
+    Date expiration = fiveMinutes.extractClaim(token, Claims::getExpiration);
+
+    assertThat(expiration.getTime() - issuedAt.getTime()).isEqualTo(1000L * 60 * 5);
   }
 
-  @Test
-  @DisplayName("DecodingException is unchecked (a JwtException), so nothing is forced to catch it")
-  void decodingExceptionIsUnchecked() {
-    Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(
-        () -> jwtService.generateToken(ADMIN));
-
-    assertThat(thrown).isInstanceOf(RuntimeException.class);
-    assertThat(thrown).isInstanceOf(io.jsonwebtoken.JwtException.class);
-  }
+  // -------------------------------------------------------------------------------------------
+  // Claim shape
+  // -------------------------------------------------------------------------------------------
 
   @Test
-  @DisplayName("PROXY canary: SimpleGrantedAuthority serialises as {\"authority\":\"ADMIN\"} objects")
+  @DisplayName("the authorities claim renders as [{\"authority\":\"ADMIN\"}] objects, not strings")
   void authoritiesClaimRendersAsObjects() {
-    // JwtService cannot produce a token (see the class javadoc), so this rebuilds the exact
-    // builder chain from JwtService.generateToken against a valid key. It pins the jjwt +
-    // Jackson rendering of Spring Security's SimpleGrantedAuthority, which is the part an
-    // upgrade is most likely to change silently: a switch to a plain string array here would
-    // break every already-issued token and every consumer of the claim.
-    Key key = Keys.hmacShaKeyFor(Base64.getDecoder()
-        .decode("dGVzdC1zZWNyZXQta2V5LWZvci1qd3QtY2hhcmFjdGVyaXphdGlvbi0xMjM0NQ=="));
-
-    String token = Jwts.builder()
-        .claim("authorities", ADMIN.getAuthorities())
-        .setSubject(ADMIN.getUsername())
-        .setIssuedAt(new Date(System.currentTimeMillis()))
-        .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 20))
-        .signWith(key, SignatureAlgorithm.HS256)
-        .compact();
+    // This was a PROXY canary while token generation was unreachable: it rebuilt the jjwt chain
+    // by hand against a throwaway key and asserted on THAT. It now asserts on a token JwtService
+    // actually produced, so it pins the real wire format.
+    //
+    // Both JwtAuthenticationFilter's consumers and the React client read this claim. A Spring
+    // Security or jjwt upgrade that starts serialising SimpleGrantedAuthority as a plain string
+    // is a silent breaking change to every token already in circulation; this is the tripwire.
+    String token = jwtService.generateToken(ADMIN);
 
     String payload = new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]),
         StandardCharsets.UTF_8);
     assertThat(payload).contains("\"authorities\":[{\"authority\":\"ADMIN\"}]");
     assertThat(payload).contains("\"sub\":\"aziz@example.com\"");
 
-    Claims claims = Jwts.parserBuilder().setSigningKey(key).build()
-        .parseClaimsJws(token).getBody();
-    assertThat(claims.get("authorities")).isInstanceOf(List.class);
-    assertThat((List<?>) claims.get("authorities"))
+    Object authorities = jwtService.extractClaim(token, claims -> claims.get("authorities"));
+    assertThat(authorities).isInstanceOf(List.class);
+    assertThat((List<?>) authorities)
         .singleElement()
         .isEqualTo(Map.of("authority", "ADMIN"));
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // What an unusable token throws - the contract JwtAuthenticationFilter must catch
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("an expired token throws ExpiredJwtException - isTokenValid never gets to return false")
+  void expiredToken_throwsExpiredJwtException() {
+    // Note this THROWS rather than returning false: jjwt rejects exp during parsing, so
+    // isTokenValid's own !isTokenExpired() branch is unreachable for a genuinely expired token.
+    // JwtAuthenticationFilter therefore cannot handle expiry with a boolean check alone.
+    String expired = signedWith(appKey(), Instant.now().minus(2, ChronoUnit.HOURS),
+        Instant.now().minus(1, ChronoUnit.HOURS));
+
+    assertThatThrownBy(() -> jwtService.extractUsername(expired))
+        .isInstanceOf(ExpiredJwtException.class);
+    assertThatThrownBy(() -> jwtService.isTokenValid(expired, ADMIN))
+        .isInstanceOf(ExpiredJwtException.class);
+  }
+
+  @Test
+  @DisplayName("a token signed with another key throws SignatureException")
+  void wrongSignature_throwsSignatureException() {
+    Key foreign = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
+        "d3Jvbmctc2lnbmF0dXJlLWtleS11c2VkLW9ubHktYnktdGhlLXNlY3VyaXR5LXRlc3RzLTAxMjM0NTY3ODk="));
+    String forged = signedWith(foreign, Instant.now(), Instant.now().plus(1, ChronoUnit.HOURS));
+
+    assertThatThrownBy(() -> jwtService.extractUsername(forged))
+        .isInstanceOf(SignatureException.class);
+  }
+
+  @Test
+  @DisplayName("garbage throws MalformedJwtException")
+  void garbageToken_throwsMalformedJwtException() {
+    assertThatThrownBy(() -> jwtService.extractUsername("not-a-jwt"))
+        .isInstanceOf(MalformedJwtException.class);
+  }
+
+  @Test
+  @DisplayName("null/empty throws IllegalArgumentException, which is NOT a JwtException")
+  void nullOrEmptyToken_throwsIllegalArgumentException() {
+    // The old suite asserted DecodingException here, because the key blew up before the token was
+    // ever looked at. Now the token IS looked at, and jjwt's null/empty guard is a plain
+    // IllegalArgumentException that does NOT extend JwtException. A filter that catches only
+    // JwtException still 500s on the header "Authorization: Bearer " with nothing after it.
+    assertThatThrownBy(() -> jwtService.extractUsername(null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .isNotInstanceOf(io.jsonwebtoken.JwtException.class);
+    assertThatThrownBy(() -> jwtService.extractUsername(""))
+        .isInstanceOf(IllegalArgumentException.class)
+        .isNotInstanceOf(io.jsonwebtoken.JwtException.class);
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Refuse to start rather than start insecure
+  // -------------------------------------------------------------------------------------------
+
+  @Test
+  @DisplayName("a missing or blank secret fails construction, so the context fails to start")
+  void blankSecret_failsFast() {
+    // Spring resolves ${JWT_SECRET} before this constructor runs, so an ABSENT variable already
+    // fails at placeholder resolution. This covers the next case down: the variable is present
+    // but empty, which resolves fine and would otherwise produce a zero-length key.
+    assertThatThrownBy(() -> new JwtService("", EXPIRY_MS))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("JWT_SECRET");
+    assertThatThrownBy(() -> new JwtService("   ", EXPIRY_MS))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("JWT_SECRET");
+  }
+
+  @Test
+  @DisplayName("a secret shorter than 256 bits is refused at construction, not at first request")
+  void shortSecret_failsFast() {
+    // Base64 of "too-short" - 9 bytes. Keys.hmacShaKeyFor rejects anything under 32.
+    // It matters that this happens in the constructor: a deployment with a weak key must die on
+    // boot, where someone is watching, rather than on the first login attempt at 3am.
+    assertThatThrownBy(() -> new JwtService("dG9vLXNob3J0", EXPIRY_MS))
+        .isInstanceOf(WeakKeyException.class);
+  }
+
+  @Test
+  @DisplayName("src/main/resources/application.yml supplies NO default for JWT_SECRET")
+  void productionConfig_hasNoFallbackSecret() throws Exception {
+    // The one assertion that cannot be made from inside a Spring context: src/test/resources
+    // shadows the production application.yml on the test classpath, so no test ever reads the
+    // real file. Read it off disk instead.
+    //
+    // A default here would be worse than the bug this slice fixes. The old key is already in git
+    // history; a committed fallback would mean every deployment that forgets to set JWT_SECRET
+    // silently signs tokens anyone can forge, and nothing would ever surface it.
+    String yaml = Files.readString(Path.of("src/main/resources/application.yml"));
+
+    assertThat(yaml).contains("${JWT_SECRET}");
+    // "${JWT_SECRET:anything}" is Spring's default syntax. It must not appear.
+    assertThat(yaml).doesNotContain("${JWT_SECRET:");
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------------------------------------
+
+  private static Key appKey() {
+    return Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
+  }
+
+  private static String signedWith(Key key, Instant issuedAt, Instant expiresAt) {
+    return Jwts.builder()
+        .setSubject("aziz@example.com")
+        .setIssuedAt(Date.from(issuedAt))
+        .setExpiration(Date.from(expiresAt))
+        .signWith(key, SignatureAlgorithm.HS256)
+        .compact();
   }
 }

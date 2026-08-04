@@ -30,6 +30,45 @@ kafka:
     # (per-environment, or per-test) without recompiling.
     group-id: groupId1
 
+jwt:
+  # NO DEFAULT, DELIBERATELY. `${JWT_SECRET}` with no `:fallback` means Spring fails placeholder
+  # resolution and the context refuses to start when the variable is missing. That is the intended
+  # behaviour: a service that boots with a weak or well-known signing key issues tokens anyone can
+  # forge and reports nothing wrong, which is far worse than a service that will not boot.
+  #
+  # Must be Base64 and decode to at least 256 bits (32 bytes) - HS256's minimum, enforced by
+  # Keys.hmacShaKeyFor in JwtService's constructor. Generate one with:
+  #     openssl rand -base64 48
+  #
+  # ROTATE, do not merely externalise. The key this field used to hold is in this repository's git
+  # history and cannot be removed from clones that already exist. Moving it to an environment
+  # variable does not un-leak it. Issue a NEW secret; every token signed with the old one stops
+  # verifying the moment you do, which logs every current session out.
+  secret: ${JWT_SECRET}
+  # Token lifetime. Was the literal `1000 * 60 * 20` inside JwtService.generateToken, where it
+  # could not be changed per environment or asserted on.
+  expiration-ms: 1200000
+
+password-reset:
+  # NO DEFAULT, DELIBERATELY - same rule, and the same reason, as jwt.secret above.
+  #
+  # This key encrypts the e-mail address that becomes the ?token= of a password-reset link, and
+  # decrypts it again to decide whose password to change. The token has no expiry and is not
+  # revocable, so ANYONE HOLDING THIS KEY CAN MINT A VALID RESET LINK FOR ANY ADDRESS. It is an
+  # account-takeover key, not a config value.
+  #
+  # Must be Base64 and decode to 16, 24 or 32 bytes (AES-128/192/256), enforced in
+  # PasswordService's constructor. Generate one with:
+  #     openssl rand -base64 32
+  #
+  # ROTATE, do not merely externalise. This field used to hold a 16-character literal in
+  # PasswordService.java, and that string is in three blobs of this repository's git history -
+  # it cannot be removed from clones that already exist, and the repository is headed for public
+  # release. Moving it here does not un-leak it. Issue a NEW key; every reset link already sent
+  # stops working the moment you do, which is correct, because every one of them is forgeable by
+  # anyone who can read the history.
+  aes-key: ${PASSWORD_RESET_AES_KEY}
+
 springdoc:
   swagger-ui:
     path: /docs/swagger-ui.html

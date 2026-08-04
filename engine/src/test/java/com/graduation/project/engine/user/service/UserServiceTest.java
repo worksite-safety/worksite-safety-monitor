@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -227,6 +228,23 @@ class UserServiceTest {
     assertThrows(EntityNotFoundException.class, () -> authService.changePassword(requestDto));
 
     verify(userRepository, never()).save(any());
+  }
+
+  @Test
+  void changePassword_blankSecretKey_isRejectedBeforeAnyLookup() {
+    // The user-facing half of the decrypt("") defect. decrypt now refuses an empty token, but on
+    // its own that turns a missing token into a raw IllegalArgumentException escaping through
+    // changePassword's @SneakyThrows - and GenericExceptionHandler has no mapping for it, so the
+    // caller would get a 500 for what is plainly a bad request. changePassword therefore rejects
+    // it explicitly, before decrypt and before the repository is touched at all.
+    ChangePasswordRequestDto requestDto = new ChangePasswordRequestDto();
+    requestDto.setSecretKey("");
+    requestDto.setPassword("newPassword123");
+    requestDto.setConfirmPassword("newPassword123");
+
+    assertThrows(BadRequestException.class, () -> authService.changePassword(requestDto));
+
+    verifyNoInteractions(userRepository, passwordService);
   }
 
   @Test

@@ -31,3 +31,15 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Local secrets ###
+# JWT_SECRET, MAIL_PASSWORD and EVENT_IMAGE_PATH have no defaults in application.yml, so every
+# developer needs somewhere local to put them. These are those places, and neither is ever
+# committed. The repository's git history already contains one leaked signing key; it does not
+# need a second.
+.env
+.env.*
+!.env.example
+application-local.yml
+src/main/resources/application-local.yml
+src/main/resources/application-local.properties

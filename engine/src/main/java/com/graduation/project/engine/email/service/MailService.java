@@ -3,6 +3,8 @@ package com.graduation.project.engine.email.service;
 import com.graduation.project.engine.user.model.User;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.RequiredArgsConstructor;
@@ -78,7 +80,23 @@ public class MailService {
 
     mimeMessageHelper.setSubject(subject);
 
-    String resetPasswordLink = "http://localhost:3000/change-password?token=" + hashedEmailUrl;
+    // The token is standard-alphabet Base64 (PasswordService.encrypt), which contains '+', '/'
+    // and '=' - none of which survive a query string unescaped. '+' is the worst of them: it is
+    // the query-string encoding of a space, so a reader cannot tell an intended '+' from a space,
+    // and 49% of tokens produced by this key contain at least one.
+    //
+    // Encoded HERE, at the interpolation point, rather than by changing encrypt() to a URL-safe
+    // alphabet. Encoding is a transport concern: the token's bytes are untouched, so the pinned
+    // ciphertext contract in PasswordServiceTest holds, decrypt() keeps accepting exactly what it
+    // always accepted, and every link already sitting in someone's inbox still resolves. Moving
+    // encrypt() to Base64.getUrlEncoder() would instead change what the tokens ARE, requiring
+    // decrypt() to straddle two alphabets forever to avoid invalidating those outstanding links.
+    //
+    // URLEncoder, not UriUtils.encodeQueryParam: '+' is an RFC 3986 sub-delimiter and therefore
+    // *legal* in a query, so the RFC-correct encoder leaves it exactly as it is - which is the
+    // one character that had to change.
+    String resetPasswordLink = "http://localhost:3000/change-password?token="
+        + URLEncoder.encode(hashedEmailUrl, StandardCharsets.UTF_8);
 
     String htmlContent = "<html>"
         + "<head>"
