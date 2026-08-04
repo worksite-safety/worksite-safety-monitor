@@ -1,0 +1,113 @@
+# Worksite detector -- example configuration.
+#
+# Every value below is the built-in default, so copying this file and changing nothing
+# leaves the detector exactly as it ships. tests/test_config.py parses this file and
+# compares it against those defaults, which is what stops this documentation from
+# drifting into fiction.
+#
+# Precedence is: built-in defaults, then this file, then the environment. Each layer
+# overrides the last and only where it speaks -- naming one threshold here leaves its
+# siblings alone.
+#
+# Any setting can be overridden per deployment with WSM_<SECTION>__<FIELD>, upper or
+# lower case, e.g. WSM_KAFKA__BOOTSTRAP_SERVERS=broker-1:9092 for the value spelled
+# `kafka: bootstrap_servers:` below. Exactly one double underscore: the schema is two
+# levels deep.
+#
+# A key that is not listed here is refused, in this file and in the environment alike,
+# and the error names it. A misspelled setting is one you believe is in force and is not
+# -- WSM_KAFKA__BOOTSTRAP_SERVER, singular, would otherwise leave a rig publishing to
+# localhost for weeks with an empty dashboard and nothing logged.
+
+thresholds:
+  # Minimum YOLO confidence for a pose detection to be measured at all, as a fraction in
+  # [0, 1] -- not a percentage. Raising it drops uncertain skeletons before any angle is
+  # computed; lowering it admits poses the baseline recording rejected.
+  pose_confidence: 0.8
+
+  # Minimum YOLO confidence for a PPE or fall detection (no-helmet, no-jacket, fall),
+  # fraction in [0, 1]. This one gates what gets published as a violation, so lowering it
+  # costs false alarms and raising it costs missed ones.
+  ppe_confidence: 0.6
+
+  # Minimum per-keypoint confidence for a keypoint to count as visible, fraction in
+  # [0, 1]. Every keypoint an angle is measured from must clear this or the limb is
+  # skipped entirely: a keypoint YOLO did not find arrives at (0, 0), which measures as a
+  # real position and cannot be told from one afterwards.
+  keypoint_visibility: 0.6
+
+  # Minimum time between two published FALL events, in milliseconds. A single fall is
+  # detected on dozens of consecutive frames, and every FALL that reaches the engine
+  # emails every user in the database. 180000 ms is 3 minutes, the original's value.
+  fall_cooldown_ms: 180000
+
+  # How long a PPE violation may go undetected before its window is closed and published,
+  # in milliseconds. Detections flicker: on the baseline footage the no-jacket frames
+  # arrive as 27 separate runs, the longest 367 ms, while the engine stores a periodic
+  # event only if it lasted over 3000 ms -- so without this tolerance every one of them is
+  # dropped downstream in silence. Merging across gaps shorter than 1500 ms turns those
+  # runs into one coherent 6500 ms violation. Lower it and windows fragment again; raise
+  # it and two genuinely separate violations merge into one.
+  ppe_grace_ms: 1500
+
+upright:
+  # The posture precondition for any gesture that requires it (FRONT_BEND does; ARMS_UP
+  # does not): a worker who is sitting is not bending. It is the angle of the
+  # hip -> knee -> ankle chain, so the chain and its threshold are configured together --
+  # in the original they sat three lines apart, drifted, and left the check measuring a
+  # limb whose visibility nothing confirmed.
+  #
+  # COCO keypoint indices in [end, vertex, end] order: left hip, left knee, left ankle.
+  left_idx: [11, 13, 15]
+
+  # Right hip, right knee, right ankle.
+  right_idx: [12, 14, 16]
+
+  # A person counts as upright when that angle is above this many degrees, in [0, 180].
+  # Lower it and a seated worker starts registering bends. This is not FRONT_BEND's
+  # `relaxing` threshold, which the original happened to spell with the same number.
+  angle_degrees: 160.0
+
+kafka:
+  # host:port of the broker, or a comma-separated list of them.
+  bootstrap_servers: "localhost:9092"
+
+  # The topic the engine's RawEventService listens on. Both sides have to agree: changing
+  # it here alone publishes into the void, with no error on either side.
+  topic: "rawEvents"
+
+camera:
+  # Where frames come from: a digit for a local webcam index ("0" is the first camera), or
+  # a video file path, or a stream URL such as rtsp://gate/1. Quoted, because it stays a
+  # string even when it looks like a number.
+  source: "0"
+
+  # The label stored on every event from this camera and grouped by in the dashboard.
+  # Leave it null to reuse `source`, which is what the original sent -- so history from a
+  # default rig is filed under "0". Setting a name renames the camera from that moment
+  # onwards and orphans everything already recorded under the old one.
+  name: null
+
+models:
+  # YOLOv8 pose weights: the 17-keypoint skeleton every gesture angle is measured from.
+  # Relative paths are resolved against the process working directory. Nothing here is
+  # opened or even checked for existence at load time, so a workstation may configure a
+  # path only the detector host can see.
+  pose_weights: models/yolov8s-pose.pt
+
+  # The custom-trained detector for the no-helmet, no-jacket and fall classes.
+  ppe_weights: models/best.pt
+
+output:
+  # Where the annotated frame is written, overwritten in place on every frame. This is the
+  # "video stream": the engine serves this single file and the web app polls it.
+  annotated_frame_path: output_image.jpg
+
+  # Whether to write it at all. Set it to false on a headless site to skip the encode and
+  # the disk write per frame; the stream page then shows nothing.
+  write_annotated_frame: true
+
+# Gestures (ARMS_UP, FRONT_BEND) are deliberately not configurable from this file. A
+# gesture is a keypoint chain plus a hysteresis band whose validity depends on the
+# `upright` section above, not a knob to retune per site; both live in
+# src/worksite_detector/config.py alongside the invariants that keep them honest.
