@@ -31,10 +31,21 @@ public class RawEventService {
 
   Logger logger = LoggerFactory.getLogger(RawEventService.class);
 
-  @KafkaListener(topics = "rawEvents", groupId = "groupId1")
+  @KafkaListener(topics = "${kafka.raw-event.topic}", groupId = "${kafka.raw-event.group-id}")
   @SneakyThrows
   void listener(RawEvent data) {
     logger.info("Listener received: {} !", data);
+
+    // RawEvent is @JsonIgnoreProperties(ignoreUnknown = true) and has no required fields, so a
+    // payload that simply omits eventType deserialises cleanly and every branch below throws
+    // NullPointerException on its first .equals(...). Thrown, that exception reaches the
+    // container's error handler, which re-invokes this method for the same record - ten times
+    // with spring-kafka's default backoff - before giving up. An event with no type can never
+    // be routed, so it is dropped here, once, where the reason can still be logged.
+    if (data == null || data.getEventType() == null) {
+      logger.warn("Dropping raw event with no eventType: {}", data);
+      return;
+    }
 
     if (data.getEventType().equals(EventNameEnum.FALL.name())) {
       List<User> users = userResponseDto2UserConverter.convert(userService.getAllUsers());

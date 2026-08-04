@@ -1,7 +1,6 @@
 package com.graduation.project.engine.rawEvent.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -219,15 +218,28 @@ class RawEventServiceTest {
   }
 
   @Test
-  @DisplayName("null eventType: NullPointerException escapes the listener (poison-pill message)")
-  void nullEventType_throwsNullPointerException() {
-    // RawEvent is @JsonIgnoreProperties(ignoreUnknown = true), so a payload that simply omits
-    // eventType deserialises with a null field and blows up on the first .equals(...) call.
+  @DisplayName("null eventType: dropped silently, nothing persisted, nothing thrown")
+  void nullEventType_isDropped() {
+    // CHANGED, and the only assertion in this class that was changed. It previously read
+    //
+    //     assertThrows(NullPointerException.class, () -> rawEventService.listener(event));
+    //
+    // pinning the fact that a payload which simply omits eventType (RawEvent is
+    // @JsonIgnoreProperties(ignoreUnknown = true), so the field arrives null) blew up on the
+    // first .equals(...) call. That NPE escaped into the listener container, which re-invoked
+    // the listener ten times for the same record before giving up - see
+    // RawEventListenerIT.missingEventTypeIsDroppedAndTheNextEventStillArrives, which measured
+    // exactly ten invocations against a real broker.
+    //
+    // Throwing is now the wrong behaviour by contract: an event with no type can never be
+    // routed, so the listener drops it itself rather than handing the container an exception to
+    // retry. The routing rules for every event type that HAS a type are untouched.
     RawEvent event = rawEvent((String) null, null);
 
-    assertThrows(NullPointerException.class, () -> rawEventService.listener(event));
+    rawEventService.listener(event);
 
     verify(eventRepository, never()).save(any(Event.class));
+    verifyNoInteractions(mailService, userService, userResponseDto2UserConverter);
   }
 
   private static RawEvent rawEvent(EventNameEnum type, BigDecimal timePeriod) {

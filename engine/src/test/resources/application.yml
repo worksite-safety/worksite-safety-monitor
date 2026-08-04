@@ -8,7 +8,8 @@
 #
 # Every ${...} placeholder referenced from src/main must resolve here:
 #   spring.kafka.bootstrap-servers  -> KafkaConsumerConfig
-#   kafka.raw-event.topic           -> KafkaTopicConfig
+#   kafka.raw-event.topic           -> KafkaTopicConfig, RawEventService @KafkaListener
+#   kafka.raw-event.group-id        -> RawEventService @KafkaListener
 #   spring.mail.host/port/username/password -> MailConfig
 #   spring.mail.username            -> MailService (fromMail)
 #   event.image.path                -> EventController
@@ -40,6 +41,16 @@ spring:
     # Fast-failing: nothing listens on port 1, so a connection attempt is refused
     # immediately instead of hanging on a retry/backoff loop.
     bootstrap-servers: localhost:1
+    # WARNING: everything below this line is INERT and is kept only as documentation of that
+    # fact. KafkaConsumerConfig declares a bean literally named "kafkaListenerContainerFactory",
+    # which is the name Spring Boot's auto-configured factory would have taken, so Boot backs
+    # off and neither KafkaProperties nor ConcurrentKafkaListenerContainerFactoryConfigurer is
+    # ever applied. Verified: with auto-startup false the listener container still starts.
+    #
+    # Only spring.kafka.bootstrap-servers above has any effect, because KafkaConsumerConfig
+    # reads it by hand with @Value. auto-offset-reset and the consumer group id are set in
+    # KafkaConsumerConfig and on the @KafkaListener respectively; do NOT change them here and
+    # expect anything to happen. See the "Known limitation" section of KafkaConsumerConfig.
     listener:
       auto-startup: false
     consumer:
@@ -49,6 +60,7 @@ spring:
 kafka:
   raw-event:
     topic: rawEvents-test
+    group-id: rawEvents-test-group
 
 springdoc:
   swagger-ui:

@@ -182,6 +182,22 @@
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!--
+          Awaitility is NOT transitively available through spring-boot-starter-test: Boot's
+          starter pulls in JUnit, Mockito, AssertJ, Hamcrest, JSONassert, JsonPath and XMLUnit,
+          but awaitility is only *managed* by spring-boot-dependencies (4.2.0 for Boot 3.0.4),
+          never declared. Hence no <version> here.
+
+          Needed because the Kafka ITs assert on a side effect produced asynchronously on a
+          consumer thread; a Thread.sleep long enough to be reliable is also long enough to
+          dominate the IT runtime, and one short enough to be fast is flaky.
+        -->
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

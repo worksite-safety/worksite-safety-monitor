@@ -25,6 +25,10 @@ spring:
 kafka:
   raw-event:
     topic: rawEvents
+    # Consumed by @KafkaListener on RawEventService. Previously hardcoded there as
+    # "groupId1"; externalised so the topic and the group can be pointed elsewhere
+    # (per-environment, or per-test) without recompiling.
+    group-id: groupId1
 
 springdoc:
   swagger-ui:
