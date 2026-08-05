@@ -21,7 +21,7 @@
         <org.mapstruct.version>1.5.5.Final</org.mapstruct.version>
         <spring-kafka.version>3.0.10</spring-kafka.version>
         <spring.boot.security.version>6.0.2</spring.boot.security.version>
-        <swagger.openapi.version>2.0.0</swagger.openapi.version>
+        <swagger.openapi.version>3.1.0</swagger.openapi.version>
         <itext.pdf.version>5.5.13</itext.pdf.version>
         <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
         <testcontainers.version>1.21.3</testcontainers.version>
