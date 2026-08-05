@@ -34,6 +34,24 @@ spring:
           starttls:
             enable: true
   kafka:
+    # Every spring.kafka.consumer.* and spring.kafka.listener.* key Spring Boot documents now
+    # reaches this application's listener: KafkaConsumerConfig builds its consumer map from
+    # KafkaProperties and puts the container factory through
+    # ConcurrentKafkaListenerContainerFactoryConfigurer. They were all inert before, and nothing
+    # anywhere said so - a value set here was read, plausible, and connected to nothing.
+    #
+    # Three are NOT set here, on purpose:
+    #
+    #   consumer.auto-offset-reset  KafkaConsumerConfig defaults it to `earliest` and explains
+    #                               why. Unset means earliest; set it here to override that.
+    #                               Kafka's own default, `latest`, discards the whole backlog
+    #                               for any group that has not committed - with no log line.
+    #   consumer.group-id           The listener's group is kafka.raw-event.group-id below. A
+    #                               group id set here is overridden by the @KafkaListener, so it
+    #                               would be a second name for one thing, and the losing one.
+    #   consumer.key-deserializer   Refused at startup, not ignored. This consumer constructs its
+    #   consumer.value-deserializer own deserialiser instances, and KafkaConsumer never calls
+    #                               configure() on a supplied instance.
     bootstrap-servers: localhost:9092
 kafka:
   raw-event:

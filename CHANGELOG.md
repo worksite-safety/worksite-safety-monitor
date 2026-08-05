@@ -135,6 +135,20 @@ or later.
 - **A single malformed Kafka message wedged the consumer.** Deserialization fails inside `poll()`,
   before any record exists, so the error handler never saw it and the container could not advance —
   it spun. The build log for the reproducing test was 1.26 GB.
+- **Every `spring.kafka.consumer.*` and `spring.kafka.listener.*` property was ignored.**
+  `KafkaConsumerConfig` declared `kafkaListenerContainerFactory` under the bean name Spring Boot's
+  own auto-configuration uses, so Boot backed off — and then the class applied neither
+  `KafkaProperties` nor `ConcurrentKafkaListenerContainerFactoryConfigurer`. Every such key in every
+  environment was readable, plausible and connected to nothing. Both are applied now, and three
+  settings stay in code deliberately, each with a test: `auto.offset.reset` defaults to `earliest`
+  through `putIfAbsent`, so it is a default configuration can override rather than a second
+  hardcoding; the no-retry error handler is set *after* the configurer, so it wins over any
+  `CommonErrorHandler` bean the configurer would otherwise apply; and the two `*-deserializer`
+  properties are refused at startup instead of silently ignored, because the deserialisers are
+  constructed instances and `KafkaConsumer` never calls `configure()` on one.
+  The `spring.kafka.listener.auto-startup: false` that sat in the test configuration was inert for a
+  different reason and still would be: Boot 3.0.4's `KafkaProperties.Listener` has no such field at
+  all — it arrives in 3.2. It is deleted rather than kept as documentation of a wrong diagnosis.
 - **Unrecognised `eventType`s were written to a collection no query can read.** Every read path
   filters by the five known names, so those documents were unreachable by construction. They are
   dropped with one WARNING naming the type.

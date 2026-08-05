@@ -196,10 +196,17 @@ class RawEventListenerIT extends AbstractIntegrationTest {
   /**
    * A brand-new consumer group must see what is already on the topic.
    *
-   * <p>{@code ConsumerConfig.AUTO_OFFSET_RESET_CONFIG} is not set by {@code KafkaConsumerConfig},
-   * so it falls back to the Kafka client default of {@code latest}. Every consequence of that is
-   * silent: the first deployment against an existing topic, any group-id rename, and any
-   * {@code kafka-consumer-groups --delete} all discard the backlog without a single log line.
+   * <p>Left unset, {@code ConsumerConfig.AUTO_OFFSET_RESET_CONFIG} falls back to the Kafka client
+   * default of {@code latest}. Every consequence of that is silent: the first deployment against
+   * an existing topic, any group-id rename, and any {@code kafka-consumer-groups --delete} all
+   * discard the backlog without a single log line. {@code KafkaConsumerConfig} therefore supplies
+   * {@code earliest} with {@code putIfAbsent}, as a default rather than a second hardcoding.
+   *
+   * <p>What this asserts is that DEFAULT, which is why {@code src/test/resources/application.yml}
+   * deliberately does not set {@code spring.kafka.consumer.auto-offset-reset}. That key is live
+   * now - it was inert, along with every other {@code spring.kafka.consumer.*} key - and stating
+   * it in the test configuration would let this test go on passing on the strength of that file
+   * long after the shipped default had regressed.
    *
    * <p>Uses its own topic so that neither the poison pill nor the malformed payload from the
    * other tests can change what "already on the topic" means here.

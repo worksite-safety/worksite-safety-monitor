@@ -34,7 +34,7 @@ The venv at the repository root (`.venv`) has both extras installed.
 **engine** (Java 17, Maven wrapper, run from `engine/`):
 ```
 export JAVA_HOME="/c/Users/aziz/.jdks/corretto-17.0.20"   # JDK 25 is the default and will NOT work
-./mvnw -B clean test        # 172 unit, Docker-free, ~9 s
+./mvnw -B clean test        # 178 unit, Docker-free, ~9 s
 ./mvnw -B clean verify      # + 22 integration via Testcontainers, needs Docker
 ```
 
