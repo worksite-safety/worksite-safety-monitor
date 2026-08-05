@@ -1,0 +1,100 @@
+# gitleaks configuration for the secrets job in ci.yml.
+#
+# This file exists because gitleaks reports EIGHT findings against this
+# repository's history with its default ruleset, and all eight are false
+# positives. Every one is a deliberately fake credential in a test fixture:
+# dummy signing keys, a dummy AES key and a dummy SMTP password in
+# engine/src/test/resources/application.yml and in the test classes that assert
+# the engine refuses to start without them.
+#
+# Left alone, that is a job which is red on the day it is added, for reasons
+# nobody can fix, on a codebase that is correct. Everyone learns within a week
+# that the red X on `secrets` means nothing, and then it means nothing on the
+# day it is real. A scanner nobody believes is worse than no scanner, so the
+# false positives are suppressed here, narrowly and in writing.
+#
+# ---------------------------------------------------------------------------
+# WHAT IT MISSES - measured, not assumed.
+#
+# gitleaks 8.28.0 was run against reconstructions of the credentials this
+# repository actually leaked, each one in isolation. Results:
+#
+#   Gmail app password, 16 lowercase letters, in YAML .......... NOT FOUND
+#   JWT signing key, 64 hex chars, unquoted in YAML ............ NOT FOUND
+#   JWT signing key, 64 hex chars, quoted in Java .............. NOT FOUND
+#   AES key, 16 chars, letters only, quoted in Java ............ NOT FOUND
+#   AES key, 16 chars, letters AND digits, quoted in Java ...... found
+#   SMTP username (an e-mail address) .......................... NOT FOUND
+#
+# The mechanism is in gitleaks' own rule source, cmd/generate/config/rules/
+# generic.go. The `generic-api-key` rule - the only one any of these could match
+# - carries an allowlist regex `^[a-zA-Z_.-]+$` and an entropy floor of 3.5.
+# The allowlist exists to suppress ordinary English words appearing next to the
+# word "password" in config files, and it cannot distinguish one from a
+# Google-issued app password, because at the level of a regex they are the same
+# string: letters, and nothing else. So the single credential in this
+# repository's history with real blast radius is the one the rule is guaranteed
+# to discard.
+#
+# The one that IS found is found by luck: it happened to contain digits, which
+# put it past the allowlist, and its entropy was 3.58 against a floor of 3.5.
+# Had it been letters only it would have been missed too.
+#
+# Read that table before reading a green tick as an assurance. It is a net for
+# the shapes gitleaks anticipates - AWS keys, GitHub and Slack tokens, PEM
+# blocks, service-account JSON - and those are worth a net. It is not evidence
+# that this repository is clean. The four real credentials were found by a
+# person reading application.yml and PasswordService.java, which is still the
+# only method with a record of working here.
+# ---------------------------------------------------------------------------
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Test fixtures. engine/src/test is where the engine's own tests supply the
+signing key, AES key and SMTP password that src/main deliberately refuses to
+default - ProductionConfigurationTest and SecurityMatrixTest exist precisely to
+assert that those have no fallback in production, and they cannot do that
+without holding a fake one. web's axios test does the same with a
+JWT-shaped string ('eyJhbGciOiJIUzI1NiJ9.header.signature') to assert the
+Authorization header is attached. Fake credentials in test sources are the
+correct state of affairs, not a leak.
+
+THE COST, stated plainly: a REAL secret pasted into a test file would also not
+be reported. That is a genuine hole and it is accepted knowingly - the
+alternative is eight permanent false positives, which buys nothing and costs the
+job its credibility. Narrow it to specific fingerprints if test sources ever
+start holding anything that matters.
+"""
+paths = [
+  '''engine/src/test/.*''',
+  '''web/src/.*\.(test|spec)\.(js|jsx)$''',
+  '''web/src/setupTests\.js$''',
+  '''detector/tests/.*''',
+]
+
+[[allowlists]]
+description = """
+Placeholder values in the environment templates. These are instructions to the
+reader ("replace-me-with-openssl-rand-base64-48"), not values, and the files
+exist to stop anyone inventing a default. Listed explicitly rather than by
+pattern so that a real value committed here would still be reported.
+"""
+paths = [
+  '''\.env\.example$''',
+  '''web/\.env\.example$''',
+]
+
+[[allowlists]]
+description = """
+Lockfiles and vendored binaries. package-lock.json is 776 KB of integrity
+hashes, which are high-entropy strings sitting next to the word "integrity" -
+the exact shape generic-api-key looks for, and never a secret.
+"""
+paths = [
+  '''package-lock\.json$''',
+  '''\.mvn/wrapper/maven-wrapper\.jar$''',
+  '''detector/tests/data/baseline/trace\.jsonl\.gz$''',
+]

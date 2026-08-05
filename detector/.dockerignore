@@ -1,0 +1,39 @@
+# Model weights - 75 MB, and deliberately NOT baked into the image. They arrive
+# as a read-only bind mount at runtime; see the Dockerfile header for why.
+models/
+*.pt
+
+# Test suite, tooling and training material: none of it runs in the image, and
+# tests/data/baseline alone is half a megabyte of recorded model output.
+tests/
+tools/
+training/
+aiModule.py
+
+# Local environments and caches. .venv especially: it holds a host platform's
+# native wheels, which would be both large and wrong inside a linux image.
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Runtime artifacts and local config.
+output_image.jpg
+data/
+aug_data/
+.env
+.env.*
+!.env.example
+
+.git/
+.idea/
+.vscode/
+.DS_Store
+Dockerfile
+.dockerignore

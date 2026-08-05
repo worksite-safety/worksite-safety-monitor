@@ -51,8 +51,17 @@ There is no top-level build. Each module is started separately. A `docker-compos
 repository root, with a Dockerfile per module, brings the whole stack up together — Kafka, MongoDB
 and the three services — and feeds the detector a mounted video file rather than a camera. Copy
 `.env.example` to `.env` first. That compose file is thoroughly commented and is the thing to read
-before relying on it; it was written alongside this documentation and has not been run end to end by
-the author of this README.
+before relying on it.
+
+It has been brought up cold twice — clean build cache, no volumes — reaching all-healthy in about
+15 seconds, with events arriving in MongoDB, the camera preview served, and an unauthenticated
+request correctly refused. Two things about the demo are worth knowing before you read too much
+into it. The bundled clip is **synthetic**, assembled from the sample images that ship inside the
+`ultralytics` package, because no real worksite footage is redistributable; it produces genuine
+detections, but it is not evidence about real sites. And because a video file's timestamps are
+measured from the start of the clip rather than from the wall clock, events from a file are stored
+against 1 January 1970 — so the dashboard's date range will look empty while the database is full.
+Both are noted at the settings that cause them.
 
 ---
 

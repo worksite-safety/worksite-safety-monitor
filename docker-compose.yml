@@ -1,0 +1,354 @@
+# Worksite safety monitor - the whole system, on one machine, from a clean clone.
+#
+#     cp .env.example .env      # then fill in the four secrets it names
+#     docker compose up --build
+#
+#     web      http://localhost:3000
+#     API      http://localhost:8080/docs/swagger-ui.html
+#
+# Five services and one init job:
+#
+#     detector  --rawEvents-->  kafka  -->  engine  <--REST/JWT--  web (browser)
+#        |                                    |
+#        +--- output_image.jpg (volume) ------+          mongodb
+#
+# The detector is included on purpose, and it is watching a VIDEO FILE rather
+# than a camera device. That one choice is what makes `docker compose up` the
+# same demo on every machine: no webcam, no /dev/video0, no platform-specific
+# passthrough, no "works on Linux only". Pointing it at a real camera is two
+# lines and is documented in .env.example.
+#
+# WHAT THIS IS NOT: a production deployment. Kafka and Mongo are single-node
+# with no authentication and no TLS, reachable from the host. That is fine for
+# a demo on a laptop and is not fine anywhere else.
+
+name: worksite-safety-monitor
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Kafka, KRaft mode - no ZooKeeper.
+  #
+  # Same image and tag as the engine's integration tests pin in
+  # AbstractIntegrationTest, so the broker the tests prove things against and
+  # the broker the demo runs on are the same broker.
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: apache/kafka:4.1.1
+    container_name: wsm-kafka
+    environment:
+      KAFKA_NODE_ID: "1"
+      # One process is both the broker and the whole controller quorum. A real
+      # deployment separates these; a demo that needs three containers to hold
+      # one topic is a demo nobody runs.
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT"
+      KAFKA_LISTENERS: "INTERNAL://:9092,CONTROLLER://:9093"
+      # Advertised as the compose service name, because every client is another
+      # container on this network. A broker advertises the address clients
+      # should reconnect on, so "localhost" here would send the engine to its
+      # own loopback and produce a connection failure that names the right port
+      # and the wrong host.
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:9092"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      # Single node: nothing can be replicated to anywhere, so every internal
+      # topic's replication factor has to be 1 or the broker refuses to create
+      # it and the first consumer group hangs.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      # Default is 3000 ms of deliberate delay before a consumer group forms,
+      # to batch joining members. With exactly one consumer that is three
+      # seconds of nothing, on every single start.
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    healthcheck:
+      # The broker's own admin client, which is the only thing that actually
+      # answers "are you ready to serve a topic" - a TCP port check passes long
+      # before the controller has elected itself and would let the engine start
+      # into a broker that then rejects it.
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    # No volume, deliberately. Kafka is the transport here, not the record:
+    # every event the engine keeps is in MongoDB, and the only thing persisting
+    # the log would preserve is messages produced while the engine was down. A
+    # volume would also need its ownership matched to the image's uid, which is
+    # a real cost for something the demo does not use.
+    networks: [wsm]
+
+  # ---------------------------------------------------------------------------
+  # Create the topic before anything produces to or consumes from it.
+  #
+  # The engine WOULD create it: KafkaTopicConfig declares a NewTopic bean and
+  # Spring's KafkaAdmin applies it at startup. Doing it here anyway buys two
+  # things. It makes the topic's shape explicit and reviewable - one partition,
+  # which is what the single @KafkaListener consumer group expects - instead of
+  # implicit in a TopicBuilder with no arguments. And it removes a start-order
+  # race: the detector can otherwise produce to a topic that does not exist
+  # yet, which with auto-creation on gives you a topic with the BROKER's
+  # default partition count rather than the engine's.
+  #
+  # Runs to completion and exits; `service_completed_successfully` below is what
+  # makes the engine wait for it.
+  # ---------------------------------------------------------------------------
+  kafka-init:
+    image: apache/kafka:4.1.1
+    container_name: wsm-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command: >
+      /opt/kafka/bin/kafka-topics.sh
+        --bootstrap-server kafka:9092
+        --create --if-not-exists
+        --topic rawEvents
+        --partitions 1
+        --replication-factor 1
+    restart: "no"
+    networks: [wsm]
+
+  # ---------------------------------------------------------------------------
+  # MongoDB - the only thing here that holds state worth keeping.
+  # ---------------------------------------------------------------------------
+  mongodb:
+    image: mongo:8.0.17
+    container_name: wsm-mongodb
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      # For mongosh or Compass from the host. Remove this line and the database
+      # is reachable only from the compose network.
+      - "${MONGO_PORT:-27017}:27017"
+    networks: [wsm]
+
+  # ---------------------------------------------------------------------------
+  # The Spring Boot API.
+  # ---------------------------------------------------------------------------
+  engine:
+    build:
+      context: ./engine
+    image: worksite-safety-monitor/engine:local
+    container_name: wsm-engine
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      # --- the four with no defaults, by design ---------------------------
+      #
+      # `:?` is compose's own required-variable syntax and it fails BEFORE any
+      # container is created, naming the variable. Without it the engine starts,
+      # Spring cannot resolve the placeholder, and the operator gets a
+      # forty-line UnsatisfiedDependencyException whose root cause sentence is
+      # somewhere in the middle. Same refusal, one second earlier, in English.
+      #
+      # Quoted because the messages contain ": ", which YAML would otherwise
+      # read as a nested mapping key and reject the whole file with a scanner
+      # error pointing at this line rather than at the quotes.
+      JWT_SECRET: "${JWT_SECRET:?missing. Copy .env.example to .env and generate one: openssl rand -base64 48}"
+      PASSWORD_RESET_AES_KEY: "${PASSWORD_RESET_AES_KEY:?missing. Copy .env.example to .env and generate one: openssl rand -base64 32}"
+      MAIL_USERNAME: "${MAIL_USERNAME:?missing. Copy .env.example to .env; any address will do for a local demo}"
+      MAIL_PASSWORD: "${MAIL_PASSWORD:?missing. Copy .env.example to .env; any string will do for a local demo}"
+
+      # --- infrastructure -------------------------------------------------
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: "27017"
+      SPRING_DATA_MONGODB_DATABASE: graduation-project-document
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      # --- the shared preview frame ---------------------------------------
+      #
+      # THE TRAILING SLASH IS LOAD BEARING. EventController.getImage builds the
+      # filename by string concatenation - `new File(imageFolderPath +
+      # "output_image.jpg")` - so without it the path becomes
+      # ".../previewoutput_image.jpg", the file is not found, and the endpoint
+      # answers 404 with nothing logged. The web app's stream page then shows a
+      # blank rectangle forever and nothing anywhere says why.
+      #
+      # Must name the same volume the detector writes into. That is the entire
+      # contract between the two containers for the "video stream".
+      EVENT_IMAGE_PATH: /var/lib/worksite/preview/
+
+      # --- policy ----------------------------------------------------------
+      #
+      # Both derived from WEB_PORT so they cannot drift from where the UI is
+      # actually served. CORS must name the browser's EXACT origin: the match is
+      # string equality and the engine refuses "*" at startup, which is the
+      # defect this setting exists to prevent - there is no wildcard escape
+      # hatch, by design. Change WEB_PORT and the published port, the trusted
+      # origin and the password-reset link all move together; hardcode either of
+      # these and a port change breaks every authenticated call with a browser
+      # console error that reads like a backend fault.
+      #
+      # (The dev server has the same constraint from the other side:
+      # vite.config.js pins port 3000 with strictPort so a busy port fails
+      # loudly rather than drifting to 5174 and silently failing CORS.)
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:${WEB_PORT:-3000}
+      APP_FRONTEND_BASE_URL: http://localhost:${WEB_PORT:-3000}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+
+      # The unit the detector sends `timePeriod` in. MILLIS because the
+      # detector in this compose file is the rewritten one; application.yml
+      # still defaults to SECONDS for the producer that is deployed in the
+      # field. Get this wrong in either direction and it is silent: millis read
+      # as seconds stores 33 ms flickers as violations, seconds read as millis
+      # stores nothing at all.
+      EVENT_PERIODIC_INPUT_UNIT: MILLIS
+    volumes:
+      - preview:/var/lib/worksite/preview:ro
+    ports:
+      - "${ENGINE_PORT:-8080}:8080"
+    healthcheck:
+      # /docs is springdoc's OpenAPI JSON and is in SecurityConfiguration's
+      # PUBLIC_URLS, so it needs no token. BusyBox wget, because the runtime
+      # image is Alpine and has no curl - and no actuator is on the classpath,
+      # so there is no /actuator/health to ask instead.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/docs >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    networks: [wsm]
+
+  # ---------------------------------------------------------------------------
+  # The React app, built to static files and served by nginx.
+  # ---------------------------------------------------------------------------
+  web:
+    build:
+      context: ./web
+      args:
+        # Baked in at build time - a static bundle has no runtime environment.
+        # The browser calls the engine directly on the HOST's published port,
+        # not over the compose network, so this is localhost and not `engine`.
+        # No trailing slash: that is the shape web/.env.example documents.
+        VITE_API_URL: "http://localhost:${ENGINE_PORT:-8080}"
+    image: worksite-safety-monitor/web:local
+    container_name: wsm-web
+    depends_on:
+      engine:
+        condition: service_healthy
+    ports:
+      # nginx-unprivileged listens on 8080 inside the container; it runs as a
+      # non-root user and so cannot bind 80.
+      - "${WEB_PORT:-3000}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+    networks: [wsm]
+
+  # ---------------------------------------------------------------------------
+  # The detector: YOLO pose + the custom PPE/fall model, publishing to Kafka.
+  #
+  # Two bind mounts it cannot start without, both read-only, and neither of
+  # them in git:
+  #
+  #   ./detector/models   75 MB of weights. Gitignored - they are what made
+  #                       this repository 250 MB before the v1.0.0 history
+  #                       rewrite - and NOT downloaded automatically, because
+  #                       ultralytics silently fetches a stock model for any
+  #                       weights name it recognises and a wrong path would
+  #                       leave a rig running a detector that has never heard
+  #                       of a hard hat.
+  #   ${DEMO_VIDEO_DIR}   your footage. None ships with the repository: video
+  #                       of identifiable people on a real worksite is not
+  #                       redistributable.
+  #
+  # Missing either one is reported by the container's entrypoint as a sentence
+  # naming the HOST directory to put it in, which is the one thing the program
+  # itself cannot know.
+  # ---------------------------------------------------------------------------
+  detector:
+    build:
+      context: ./detector
+    image: worksite-safety-monitor/detector:local
+    container_name: wsm-detector
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    environment:
+      # Every WSM_<SECTION>__<FIELD> below overrides exactly one setting in
+      # detector/config.example.yaml. A misspelled one is FATAL at startup by
+      # design, rather than silently ignored - so if this container exits 2
+      # complaining about an unknown key, that is the loader working.
+      WSM_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
+      WSM_KAFKA__TOPIC: rawEvents
+
+      # KNOWN CONSEQUENCE OF DEMOING FROM A FILE, so nobody debugs it twice:
+      # events from a VIDEO FILE are timestamped with the media position, not
+      # the wall clock. OpenCvFrameSource reads CAP_PROP_POS_MSEC for a file and
+      # the clock only for a camera, so a violation four seconds into the clip
+      # is stored with startTime=4000 - four seconds after the epoch. The charts
+      # then bucket it on 01.01.1970, and a dashboard opened on today's range is
+      # empty even though the database is not. (Verified: /event/periodic-events
+      # returns {"date":"01.01.1970","noHelmet":9,"noJacket":9}.)
+      #
+      # Set the date range back to 1970 to see the demo data, or point
+      # WSM_CAMERA__SOURCE at a camera or an rtsp:// URL, where timestamps are
+      # wall-clock and the default ranges work. This is a property of the
+      # detector's time source, not of compose - there is no setting here that
+      # changes it.
+      WSM_CAMERA__SOURCE: /media/${DEMO_VIDEO:-worksite.mp4}
+      # The label stored on every event and grouped by in the dashboard.
+      # Without it the camera is named after its source, and the history from
+      # this demo would be filed under "/media/worksite.mp4".
+      WSM_CAMERA__NAME: ${CAMERA_NAME:-demo-clip}
+
+      WSM_MODELS__POSE_WEIGHTS: /opt/detector/models/yolov8s-pose.pt
+      WSM_MODELS__PPE_WEIGHTS: /opt/detector/models/best.pt
+
+      # The other half of EVENT_IMAGE_PATH above. These two must agree or the
+      # preview is a permanent 404.
+      WSM_OUTPUT__ANNOTATED_FRAME_PATH: /var/lib/worksite/preview/output_image.jpg
+      WSM_OUTPUT__WRITE_ANNOTATED_FRAME: "true"
+
+      # Replay the clip at its end. Not WSM_-prefixed on purpose: that prefix
+      # is the config loader's, and it would reject this as an unknown setting.
+      DETECTOR_LOOP: ${DETECTOR_LOOP:-true}
+    volumes:
+      - ./detector/models:/opt/detector/models:ro
+      - ${DEMO_VIDEO_DIR:-./demo}:/media:ro
+      - preview:/var/lib/worksite/preview
+    # on-failure, NOT unless-stopped. The clip's end is exit 0 and is handled
+    # inside the container (DETECTOR_LOOP), so the only thing a restart policy
+    # can act on here is a failure - and restarting on a missing weights file
+    # would replace one clear message with an endless loop of it.
+    restart: on-failure:3
+    networks: [wsm]
+
+    # --- Using a real camera instead ---------------------------------------
+    # Uncomment, set WSM_CAMERA__SOURCE to "0", and note that this works on
+    # LINUX ONLY: Docker Desktop on Windows and macOS runs containers inside a
+    # VM with no path to a host USB device. An IP camera needs none of this -
+    # set WSM_CAMERA__SOURCE to its rtsp:// URL and leave the mounts alone.
+    #
+    # devices:
+    #   - "/dev/video0:/dev/video0"
+
+volumes:
+  mongo-data:
+  # The "video stream": one JPEG, overwritten in place by the detector on every
+  # frame, read by the engine and polled by the browser ten times a second. A
+  # volume rather than a bind mount so it does not depend on a host path, and
+  # so it is not subject to the bind-mount write latency Docker Desktop has on
+  # Windows and macOS - this file is rewritten ~25 times a second.
+  preview:
+
+networks:
+  wsm:
+    driver: bridge

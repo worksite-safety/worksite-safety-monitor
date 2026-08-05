@@ -1,0 +1,94 @@
+name: Bug report
+description: Something behaves differently from how it is documented to behave.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before anything else: **which of the three modules is it?** They run as
+        separate processes and share only a Kafka topic and an HTTP API, so a
+        report that does not say which one costs a reviewer the first hour.
+
+        A note on this system in particular: most of its interesting failures
+        are **silent**. An event that is never stored, a preview that 404s, a
+        chart that buckets a violation on the wrong day - none of these throw,
+        and none of them log. So "what did you expect to see and what did you
+        see instead" matters more here than a stack trace, and an empty chart is
+        a perfectly good bug report.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options:
+        - engine (Spring Boot API)
+        - detector (Python / YOLO)
+        - web (React front end)
+        - docker-compose / CI / build
+        - "Not sure - it crosses modules"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect instead?
+      placeholder: |
+        e.g. The detector logs "publishing to topic 'rawEvents'" and reports
+        events at exit, but /event/all-events returns []. I expected the
+        NO_JACKET events to appear.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >
+        Exact commands. If you are using docker compose, say so - it changes
+        every path, every hostname and the process user.
+      placeholder: |
+        1. cp .env.example .env, filled in the four secrets
+        2. docker compose up --build
+        3. Waited for the detector to complete one pass
+        4. curl -H "Authorization: Bearer ..." localhost:8080/event/all-events
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: >
+        `docker compose logs <service>`, or the module's own output.
+        **Read them before pasting**: the four things this project has leaked
+        before are a JWT signing key, an AES key, an SMTP username and a Gmail
+        app password. Redact anything of that shape.
+      render: shell
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      value: |
+        - How it is running: docker compose / each module by hand
+        - OS:
+        - Docker version (`docker version --format '{{.Server.Version}}'`):
+        - Java (`java -version`), Python (`python --version`), Node (`node --version`) if not using compose:
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: weights
+    attributes:
+      label: If this is a detector issue
+      options:
+        - label: >
+            `detector/models/` contains both `best.pt` and `yolov8s-pose.pt`.
+            They are gitignored, so a fresh clone has neither, and their absence
+            is the single most common reason the detector does not start.
+        - label: >
+            I tried `--dry-run`, which runs the whole pipeline against no broker
+            and prints what it would have published. It separates "the detector
+            saw nothing" from "the events never reached the engine", which are
+            different bugs in different modules.

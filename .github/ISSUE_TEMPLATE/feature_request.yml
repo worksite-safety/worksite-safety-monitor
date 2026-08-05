@@ -1,0 +1,50 @@
+name: Feature request
+description: Propose a change to what the system does.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One thing worth knowing before you write this up, because it is the most
+        common shape of request here:
+
+        **Adding an event type touches three modules.** A new kind of violation
+        needs the Python rule that emits it, `EventNameEnum` plus the countable
+        and periodic type lists in `EventService`, and the `keysAndColors*`
+        arrays in the web app's `ChartsContainer`. Miss one and the event is
+        detected, stored and never displayed - with nothing failing anywhere.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: >
+        The situation, not the solution. "A supervisor cannot tell which camera
+        a violation came from" is a problem; "add a camera dropdown" is one
+        answer to it, and possibly not the best one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: surfaces
+    attributes:
+      label: Which surfaces would this touch?
+      options:
+        - label: detector - what is detected, or how
+        - label: engine - the API, the stored schema, or the ingest rules
+        - label: web - charts, grid, reporting or the stream page
+        - label: The event taxonomy (a new countable or periodic event type)
+        - label: Deployment (docker-compose, configuration, CI)
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else did you consider?
+      description: Including doing nothing, and what that costs.
