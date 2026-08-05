@@ -14,10 +14,24 @@ Defaults everywhere assume localhost: Kafka `:9092`, MongoDB `:27017`, engine `:
 | engine | JDK 17, the bundled Maven wrapper. A reachable MongoDB and Kafka to do anything useful. Docker for the integration tier |
 | web | Node.js and npm |
 
-Model weights are not in git (`.gitignore` excludes `*.pt`) and are deliberately not downloaded for
-you: ultralytics fetches any weights name it recognises, so a mistyped path would silently run a
-stock model in place of the one this project trained. The detector refuses to start without them and
-prints where to get them.
+Model weights are not in git (`.gitignore` excludes `*.pt`). Both are attached to the
+[`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
+release — a pre-release that carries assets only, so it is never GitHub's "Latest" and does not
+claim to be a release of this code. From the repository root:
+
+```bash
+gh release download weights-v1 --repo worksite-safety/worksite-safety-monitor \
+  --pattern '*.pt' --dir detector/models
+```
+
+`best.pt` is this project's fine-tune (`fall`, `no-helmet`, `no-jacket`) and exists nowhere else
+publicly; `yolov8s-pose.pt` is stock Ultralytics, attached alongside it purely for convenience. The
+release notes list the SHA256 of both — worth checking, because a `best.pt` that does not match is
+not the model any number in `CHANGELOG.md` or `detector/tests/data/baseline/` came from.
+
+They are deliberately not downloaded for you: ultralytics fetches any weights name it recognises, so
+a mistyped path would silently run a stock model in place of the one this project trained. The
+detector refuses to start without them and prints the release URL and the command above.
 
 ## Configuration and secrets
 

@@ -161,3 +161,9 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
 
 `~/oss-release/` holds the pre-rewrite backups and the model weights. **`best.pt` is not
 reproducible** — the training dataset is not in the repository. Do not delete that directory.
+
+Both weights are now also published as assets of the [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
+pre-release, with their SHA256 in the notes, so `best.pt` is no longer a single local copy. That
+release deliberately does **not** use the `v1.0.0` tag: it carries assets, not a version of this
+code, and `v1.0.0` stays unclaimed until item 3 above clears and the repository goes public. Being
+a pre-release, it is never GitHub's "Latest", so `v1.0.0` can take that place when it is cut.

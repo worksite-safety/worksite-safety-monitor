@@ -360,10 +360,14 @@ pyrightconfig.json
 # IDE module metadata
 *.iml
 
-# Model weights. Both ship as GitHub Release assets and both must be downloaded
-# into detector/models/ by hand: the detector refuses to start when either is
-# missing, precisely so ultralytics cannot silently fetch a stock model under a
-# recognised filename and run it in place of the one this project trained.
+# Model weights. Both ship as assets of the weights-v1 release and both must be
+# put in detector/models/ deliberately - from this directory, `gh release
+# download weights-v1 --repo worksite-safety/worksite-safety-monitor --pattern
+# '*.pt' --dir detector/models` - never as a side effect of running something.
+# The detector refuses to start
+# when either is missing, precisely so ultralytics cannot silently fetch a stock
+# model under a recognised filename and run it in place of the one this project
+# trained.
 # Neither belongs in git - they are what made this repository 250 MB before the
 # v1.0.0 history rewrite.
 *.pt

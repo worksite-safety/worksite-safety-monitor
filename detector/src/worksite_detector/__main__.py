@@ -100,7 +100,15 @@ _PROGRAM: Final = "worksite-detector"
 #: Where the two sets of weights come from. `best.pt` is 50 MB of trained model and is
 #: gitignored, so "clone and run" cannot work without this line being somewhere an operator
 #: meets at the moment it matters.
-_RELEASES_URL: Final = "https://github.com/worksite-safety/worksite-safety-monitor/releases"
+#:
+#: One specific tag, not `/releases` and not `/releases/latest`. The weights are attached to
+#: a *pre-release* on purpose -- it carries assets, not a version of this code -- and GitHub
+#: resolves `/releases/latest` only to a full release, so that URL 404s while `weights-v1`
+#: is the only thing published. A tag URL is exact today and stays correct on the day a code
+#: release is cut beside it.
+_WEIGHTS_RELEASE_URL: Final = (
+    "https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1"
+)
 
 EXIT_OK: Final = 0
 #: The configuration cannot be resolved: bad YAML, an unknown key, a value of the wrong
@@ -337,14 +345,33 @@ def require_weights(config: Config) -> None:
     # Quoted by hand rather than with `!r`, matching `adapters`: `repr` doubles every
     # backslash and this project's operators read Windows paths out of these messages.
     named = " and ".join(f'the {label} weights are not at "{path}"' for label, path in missing)
+
+    # The `--dir` of the suggested command is *resolved*, not the literal "detector/models"
+    # -- a relative example would be wrong from the one directory the operator is most
+    # likely standing in when they read this. `python -m worksite_detector` is documented
+    # as being run from `detector/`, where "detector/models" names `detector/detector/models`.
+    # When both files are configured into one directory (the default, and every
+    # configuration anyone has written) a single command fetches both; when they are not,
+    # no one command can, and the paths above are already the instruction.
+    directories = {path.parent for _, path in missing}
+    if len(directories) == 1:
+        target = directories.pop().resolve()
+        how = (
+            "fetch both with `gh release download weights-v1 --repo "
+            f'worksite-safety/worksite-safety-monitor --pattern \'*.pt\' --dir "{target}"`, '
+            f"or download them from that page into {target}"
+        )
+    else:
+        how = "download them from that page to exactly the paths named above"
+
     raise StartupError(
         f"{named}. Relative paths resolve against the working directory, which is "
-        f"currently {Path.cwd()}. Both files are attached as assets to the latest release "
-        f"at {_RELEASES_URL}: download them into detector/models/, or point "
-        "models.pose_weights and models.ppe_weights at wherever you keep them. They are "
-        "not fetched for you -- ultralytics downloads any weights name it recognises, so "
-        "a mistyped path would otherwise start a silent network fetch and run a stock "
-        "model in place of the one this project trained."
+        f"currently {Path.cwd()}. Both files are attached to the weights-v1 release at "
+        f"{_WEIGHTS_RELEASE_URL}: {how}, or point models.pose_weights and "
+        "models.ppe_weights at wherever you keep them. They are not fetched for you -- "
+        "ultralytics downloads any weights name it recognises, so a mistyped path would "
+        "otherwise start a silent network fetch and run a stock model in place of the one "
+        "this project trained."
     )
 
 

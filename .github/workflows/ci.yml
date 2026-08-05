@@ -385,9 +385,12 @@ jobs:
       #
       # yolov8s-pose.pt IS publicly downloadable, so it is fetched here and a
       # good part of the tier that would otherwise skip actually runs.
-      # best.pt is NOT: it is this project's own trained model and exists only
-      # as a release asset. Tests that need it skip on CI, always, and there is
-      # no arrangement of this workflow that changes that.
+      # best.pt is this project's own trained model and exists nowhere but the
+      # weights-v1 release of this repository. That release IS reachable from
+      # here with GITHUB_TOKEN - so this is a choice, not a limit: 52 MB on
+      # every run, for a tier whose job is to keep the adapters honest about
+      # tensor shapes, which the pose weights already do. Tests needing best.pt
+      # skip on CI. Run them locally, where the file is already on disk.
       #
       # Best-effort on purpose: an ultralytics release asset moving should show
       # up as more skips and a printed warning, not as a red build on a
@@ -439,17 +442,18 @@ jobs:
       # dry-run summary - which no unit test does and no fixture-level
       # integration test does either.
       #
-      # It needs BOTH sets of weights, so on CI it is skipped, always: best.pt is
-      # this project's own trained model and is not fetchable here. Written as a
-      # skip rather than dropped because it does run - locally, and in any fork
-      # that has the release assets - and a step that silently does not exist
-      # cannot be noticed and turned on.
+      # It needs BOTH sets of weights, so on CI it is skipped: best.pt is not
+      # fetched here on purpose (see the note above the pose-weights step - it
+      # is a 52 MB asset of the weights-v1 release, reachable but deliberately
+      # left alone). Written as a skip rather than dropped because it does run -
+      # locally, and anywhere the release assets have been downloaded - and a
+      # step that silently does not exist cannot be noticed and turned on.
       - name: Smoke-test the real pipeline (only if both weights are present)
         working-directory: detector
         run: |
           if [ ! -f models/yolov8s-pose.pt ] || [ ! -f models/best.pt ]; then
             echo "Skipped: needs both models/yolov8s-pose.pt and models/best.pt."
-            echo "best.pt is a release asset of this repository and is not fetchable here."
+            echo "best.pt is an asset of the weights-v1 release and is not fetched on CI."
             exit 0
           fi
           python - <<'PY'

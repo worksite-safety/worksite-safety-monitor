@@ -56,7 +56,13 @@ def ppe_weights() -> Path:
 def _weights(name: str) -> Path:
     path = _DETECTOR_ROOT / "models" / name
     if not path.is_file():
-        pytest.skip(f"{path} is not present; model weights are gitignored")
+        # The `--dir` is resolved rather than the literal "detector/models": this suite is
+        # normally run from `detector/`, where that relative path names the wrong directory.
+        pytest.skip(
+            f"{path} is not present; model weights are gitignored. Get both with: "
+            "gh release download weights-v1 --repo worksite-safety/worksite-safety-monitor "
+            f'--pattern \'*.pt\' --dir "{(_DETECTOR_ROOT / "models").resolve()}"'
+        )
     return path
 
 

@@ -260,7 +260,14 @@ services:
   #
   #   ./detector/models   75 MB of weights. Gitignored - they are what made
   #                       this repository 250 MB before the v1.0.0 history
-  #                       rewrite - and NOT downloaded automatically, because
+  #                       rewrite - so a fresh clone has neither file. Both are
+  #                       attached to the weights-v1 release:
+  #
+  #                         gh release download weights-v1 \
+  #                           --repo worksite-safety/worksite-safety-monitor \
+  #                           --pattern '*.pt' --dir detector/models
+  #
+  #                       They are NOT downloaded automatically, because
   #                       ultralytics silently fetches a stock model for any
   #                       weights name it recognises and a wrong path would
   #                       leave a rig running a detector that has never heard

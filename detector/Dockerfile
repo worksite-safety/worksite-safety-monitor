@@ -144,12 +144,22 @@ worksite-detector: the model weights are not in this container.
   host, and at least one of best.pt (52 MB) or yolov8s-pose.pt (23 MB) is not
   there. Both are gitignored, so a fresh clone does not have them.
 
-    yolov8s-pose.pt  a stock Ultralytics release asset:
+    yolov8s-pose.pt  stock Ultralytics pose weights, also available from
                      https://github.com/ultralytics/assets/releases
     best.pt          the model THIS project trained, for no-helmet / no-jacket /
-                     fall. There is no public copy; it ships as a release asset
-                     of this repository. If you are running from a clone with no
-                     release attached, ask whoever gave you the clone.
+                     fall. There is no public copy of it anywhere else.
+
+  Both are attached to the weights-v1 release of this repository. From the
+  repository root on the HOST, not in here:
+
+    gh release download weights-v1 \
+      --repo worksite-safety/worksite-safety-monitor \
+      --pattern '*.pt' --dir detector/models
+
+  or download both by hand from
+  https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1
+  into ./detector/models, then bring this container back up. The release notes
+  carry the SHA256 of both files.
 
   They are not downloaded for you on purpose: ultralytics will silently fetch a
   stock model for any weights name it recognises, so a wrong path would leave a

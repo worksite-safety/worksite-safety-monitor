@@ -86,7 +86,9 @@ body:
         - label: >
             `detector/models/` contains both `best.pt` and `yolov8s-pose.pt`.
             They are gitignored, so a fresh clone has neither, and their absence
-            is the single most common reason the detector does not start.
+            is the single most common reason the detector does not start. Both
+            are attached to the `weights-v1` release; the notes there list the
+            SHA256 of each, worth checking before reporting wrong detections.
         - label: >
             I tried `--dry-run`, which runs the whole pipeline against no broker
             and prints what it would have published. It separates "the detector

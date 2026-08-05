@@ -22,7 +22,7 @@ it, and credit in the advisory unless you would rather not have it.
 
 ## Supported versions
 
-`v1.0.0` is the first public release, and the only supported one. Fixes land on `master`.
+`v1.0.0` is the first public release, and the only supported one. Fixes land on `main`.
 
 ---
 

@@ -76,6 +76,29 @@ the events in memory instead of publishing them. It contacts no broker, needs no
 library, and needs neither the engine, MongoDB nor the web app. It is the fastest way to see
 whether this project works on your machine, and it is the first thing to try.
 
+Two things must be on disk first: `detector/models/yolov8s-pose.pt` and `detector/models/best.pt`.
+Neither is in git — `.gitignore` excludes `*.pt` — so a fresh clone has neither. Both are attached to
+the [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
+release. **From the repository root:**
+
+```bash
+gh release download weights-v1 --repo worksite-safety/worksite-safety-monitor \
+  --pattern '*.pt' --dir detector/models
+```
+
+`best.pt` (52 MB) is this project's own fine-tune, for `fall` / `no-helmet` / `no-jacket`; there is no
+public copy of it anywhere else. `yolov8s-pose.pt` (23 MB) is stock Ultralytics, attached to the same
+release only so that setup is one download location rather than two. The release notes carry the
+SHA256 of both, so you can check that what you got is what this project trained.
+
+They are deliberately **not** downloaded for you, because ultralytics silently fetches any weights
+name it recognises and would run a stock model in place of the one this project trained. If either is
+missing the detector refuses to start, names both files, prints the working directory the relative
+paths resolved against, and gives the release URL and a `gh release download` line with the
+destination already resolved to an absolute path.
+
+Then:
+
 ```bash
 cd detector
 python -m venv .venv
@@ -84,13 +107,6 @@ pip install -e ".[cv]"            # ultralytics, opencv-python, kafka-python-ng
 
 python -m worksite_detector --dry-run --source path/to/clip.mp4
 ```
-
-Two things must be on disk first: `detector/models/yolov8s-pose.pt` and `detector/models/best.pt`.
-Neither is in git — `.gitignore` excludes `*.pt` — and they are deliberately **not** downloaded for
-you, because ultralytics silently fetches any weights name it recognises and would run a stock model
-in place of the one this project trained. If either is missing the detector refuses to start, names
-both files, prints the working directory the relative paths resolved against, and points at the
-release they are attached to.
 
 `--source` takes a video file path, a stream URL, or a webcam index such as `0`; it defaults to `0`,
 so a machine with no webcam needs a file. (No footage ships with this repository — worksite video of
