@@ -208,8 +208,17 @@ automatically and refuses to start without the four engine secrets — and put a
 `DEMO_VIDEO_DIR`/`DEMO_VIDEO` point, because no footage ships with this repository and the detector
 service is fed a mounted file rather than a camera device (a device passthrough would be Linux-only).
 
+`demo/make_clip.py` builds one if you have nothing to hand. It assembles a clip from the two sample
+photographs inside the `ultralytics` package — two populated stretches with an empty one between
+them, so a violation window opens, a person-free stretch closes it, and a second one opens. It
+produces genuine detections (a `NO_HELMET` and a `NO_JACKET`, each lasting about eleven seconds,
+comfortably past the engine's three-second floor), but it is synthetic and says nothing about real
+worksites. It is generated rather than committed on purpose: five megabytes of video that proves
+nothing does not belong in a repository whose history was rewritten to get binaries out of it.
+
 ```bash
 cp .env.example .env
+python demo/make_clip.py     # or point DEMO_VIDEO_DIR at your own footage
 docker compose up
 ```
 

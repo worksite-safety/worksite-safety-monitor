@@ -267,7 +267,10 @@ services:
   #                       of a hard hat.
   #   ${DEMO_VIDEO_DIR}   your footage. None ships with the repository: video
   #                       of identifiable people on a real worksite is not
-  #                       redistributable.
+  #                       redistributable. Run `python demo/make_clip.py` to
+  #                       build a synthetic one from the sample images inside
+  #                       the ultralytics package - it drives every stage of the
+  #                       pipeline, and it is evidence about nothing.
   #
   # Missing either one is reported by the container's entrypoint as a sentence
   # naming the HOST directory to put it in, which is the one thing the program

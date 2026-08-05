@@ -55,13 +55,17 @@ before relying on it.
 
 It has been brought up cold twice — clean build cache, no volumes — reaching all-healthy in about
 15 seconds, with events arriving in MongoDB, the camera preview served, and an unauthenticated
-request correctly refused. Two things about the demo are worth knowing before you read too much
-into it. The bundled clip is **synthetic**, assembled from the sample images that ship inside the
-`ultralytics` package, because no real worksite footage is redistributable; it produces genuine
-detections, but it is not evidence about real sites. And because a video file's timestamps are
-measured from the start of the clip rather than from the wall clock, events from a file are stored
-against 1 January 1970 — so the dashboard's date range will look empty while the database is full.
-Both are noted at the settings that cause them.
+request correctly refused.
+
+No footage ships with the repository, since video of identifiable people on a real worksite is not
+redistributable. `python demo/make_clip.py` builds a synthetic clip from the sample images inside
+the `ultralytics` package; it drives every stage of the pipeline and is evidence about nothing.
+Point `DEMO_VIDEO_DIR` at your own footage when you have some.
+
+One property of file input to know before reading too much into the dashboard: a video's timestamps
+run from the start of the clip rather than the wall clock, so events captured from a file are stored
+against 1 January 1970 and a date range covering today will look empty while the collection is full.
+That is the detector's time source; live camera input does not have it.
 
 ---
 
