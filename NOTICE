@@ -12,6 +12,17 @@ Contributors, per the commit history and .mailmap:
     Emre Yilmaz
     Nil Emekci
 
+The work was written between October 2023 and January 2024 as a joint university
+project and carried no licence at the time, so copyright in it was held jointly
+by all three. Each of them has since given written consent, in August 2026, to
+release it -- both the source and the trained model weights distributed with it --
+under AGPL-3.0-or-later. That consent is what makes this licence grant valid;
+none of the three could have made it alone.
+
+The consent correspondence is retained privately by the maintainer rather than
+reproduced here, since it is personal correspondence and publishing it would add
+nothing a reader needs.
+
 
 ================================================================================
 Third-party work this project derives from
