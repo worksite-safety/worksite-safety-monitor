@@ -1,0 +1,13 @@
+# blank_issues_enabled: true on purpose. The two templates cover the common
+# cases; forcing everything else through a form that does not fit produces
+# fields filled in with "n/a", which is worse than a paragraph of prose.
+blank_issues_enabled: true
+
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/worksite-safety/worksite-safety-monitor/security/advisories/new
+    about: >
+      Do NOT open a public issue. Report privately - see SECURITY.md. This
+      applies especially to anything touching the JWT signing key, the
+      password-reset AES key, or the reset-token flow, which has no expiry and
+      no revocation.

@@ -1,0 +1,578 @@
+# Continuous integration for the three modules of the worksite safety monitor.
+#
+# The jobs are shaped around one property worth protecting: THE REQUIRED CHECK
+# MUST BE FAST. `detector-unit` is the gate, it runs 418 tests, and it installs
+# no computer-vision stack at all - no torch, no opencv, no ultralytics. That is
+# not an accident of packaging, it is a design the detector's own
+# tests/test_architecture.py enforces: the rule modules may not import a heavy
+# dependency, so they can be tested on any machine in about two seconds. A CI
+# job that pulled 2 GB of torch to run them would throw that away, and the
+# review loop would get slower every week until nobody waited for it.
+#
+# Which job runs when:
+#
+#   job                   pull request   push to main   nightly
+#   --------------------  -------------  -------------  -------
+#   engine                yes            yes            yes
+#   detector-unit         yes  (gate)    yes            yes
+#   web                   yes            yes            yes
+#   detector-integration  NO             yes            yes
+#   secrets               yes            yes            yes
+#
+# detector-integration is off on pull requests on purpose. It installs torch to
+# run 63 smoke tests over real tensors; that is minutes of runner time and
+# gigabytes of network per push, for a tier that catches "ultralytics changed
+# its output shape" - a thing that happens when a dependency moves, not when
+# someone edits a rule. Nightly and on main is where that belongs.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # 03:17 UTC. An odd minute rather than :00, where every scheduled workflow
+    # on GitHub queues at once and starts late.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# Cancel superseded runs of the same branch. A force-push while CI is running
+# otherwise leaves the old commit's jobs burning runner time to report on code
+# that no longer exists.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # ---------------------------------------------------------------------------
+  # engine - Spring Boot, Java 17. Surefire (unit) then Failsafe (Testcontainers).
+  # ---------------------------------------------------------------------------
+  engine:
+    name: engine (JDK 17, unit + integration)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+          # Keys off **/pom.xml, so the ~/.m2 cache is reused until a dependency
+          # actually changes.
+          cache: maven
+
+      # The exec bit is stored in git and survives a Linux checkout, so this is
+      # belt and braces - but it costs nothing and the failure it prevents is
+      # the deeply unhelpful "./mvnw: Permission denied".
+      - name: Make the wrapper executable
+        run: chmod +x ./mvnw
+        working-directory: engine
+
+      # ---------------------------------------------------------------------
+      # DOCKER ENGINE API VERSION - read this before upgrading the runner image.
+      #
+      # The Failsafe tier starts MongoDB and Kafka through Testcontainers 1.21.3,
+      # which shades docker-java 3.4.2, which negotiates Docker Engine API
+      # **v1.32** by default. Docker 29 advertises "API version 1.55 (minimum
+      # version 1.40)" and answers GET /v1.32/info with 400 Bad Request.
+      #
+      # Testcontainers reports that as:
+      #
+      #     Could not find a valid Docker environment
+      #
+      # which is the SAME message it prints when there is no daemon at all. So
+      # the symptom of a version handshake failure is indistinguishable from an
+      # absent daemon, and the obvious next move - checking whether Docker is
+      # running - confirms that it is, and tells you nothing. It is a genuinely
+      # expensive hour.
+      #
+      # This is ALREADY HANDLED: AbstractIntegrationTest pins
+      # `System.setProperty("api.version", "1.44")` in a static block, which
+      # runs before any container starts and also covers running an IT from an
+      # IDE. Nothing needs to be set here.
+      #
+      # It is documented here anyway because the failure is latent. GitHub's
+      # ubuntu-latest currently ships a Docker older than 29, so this job would
+      # pass even if the pin were deleted - and would start failing, with that
+      # misleading message, on whatever week the runner image is bumped. If you
+      # are reading this because CI just went red on a green codebase, that is
+      # what happened; the fix is in AbstractIntegrationTest, not here.
+      # ---------------------------------------------------------------------
+      - name: Report the daemon the integration tier will talk to
+        run: |
+          echo "Docker: $(docker version --format '{{.Server.Version}}')"
+          echo "Engine API: $(docker version --format '{{.Server.APIVersion}}') (minimum $(docker version --format '{{.Server.MinAPIVersion}}'))"
+          echo "Testcontainers is pinned to api.version=1.44 by AbstractIntegrationTest."
+
+      # One `verify` rather than a separate `test` and `verify`: verify runs
+      # Surefire and then Failsafe, and splitting them would pay the ~9 s unit
+      # suite twice.
+      - name: Build, test and verify
+        run: ./mvnw -B --no-transfer-progress verify
+        working-directory: engine
+
+      # if: always(), so a failing test still publishes the report that says
+      # which lines the failing test did and did not reach. A coverage artifact
+      # you only get on success is a coverage artifact you never need.
+      - name: Upload JaCoCo coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          # jacoco-merged is unit + integration together, which is the number
+          # that means anything; target/site/jacoco is the unit-only report the
+          # `package` phase writes. Both, because the merged one silently omits
+          # everything when the Failsafe tier could not run.
+          path: |
+            engine/target/site/jacoco/
+            engine/target/site/jacoco-merged/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-test-reports
+          path: |
+            engine/target/surefire-reports/
+            engine/target/failsafe-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # detector-unit - THE REQUIRED CHECK. Fast, and must stay that way.
+  # ---------------------------------------------------------------------------
+  detector-unit:
+    name: detector (unit, no CV stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: detector/pyproject.toml
+
+      # `.[dev]` is pytest, ruff and mypy. It is NOT `.[cv]`, and that
+      # distinction is the entire point of this job: the base install declares
+      # exactly one runtime dependency (pyyaml), so this step is a couple of
+      # seconds rather than a couple of minutes.
+      #
+      # If you ever find yourself adding a package here to make a test pass,
+      # the test belongs in detector-integration instead - and
+      # tests/test_architecture.py will already have told you so.
+      - name: Install the detector and its dev tools (no torch, no opencv)
+        run: pip install -e ".[dev]"
+        working-directory: detector
+
+      # Proof, not faith. If a heavy import creeps into the base install this
+      # prints it here, in one line, instead of the job merely getting slower
+      # month by month until nobody remembers it was ever fast.
+      - name: Assert the CV stack really is absent
+        working-directory: detector
+        run: |
+          for module in torch cv2 ultralytics kafka; do
+            if python -c "import $module" 2>/dev/null; then
+              echo "::error::$module is importable in the fast tier. This job exists to be"
+              echo "::error::runnable without the CV stack - see tests/test_architecture.py."
+              exit 1
+            fi
+          done
+          echo "torch, cv2, ultralytics and kafka are all absent, as intended."
+
+      # SCOPED, and here is exactly what is left out and why:
+      #
+      #   detector/aiModule.py     the original pre-rewrite program, kept as the
+      #                            historical record the rewrite is documented
+      #                            against. 32 findings, every one of them a
+      #                            faithful record of how that file was. Linting
+      #                            a museum piece into shape would destroy the
+      #                            thing it is kept for.
+      #   detector/training/       one Jupyter notebook (15 findings). Notebooks
+      #                            are excluded from review noise by
+      #                            .gitattributes already.
+      #
+      # `tests/` is checked separately below and is NOT yet clean - see there.
+      - name: Lint (ruff)
+        run: ruff check src tools
+        working-directory: detector
+
+      # NON-BLOCKING, and it should not stay that way. `ruff check tests` reports
+      # 11 findings today: 10 import-ordering (I001) and one collapsible-if
+      # (SIM102). All are mechanical and 10 of the 11 are `ruff check --fix`
+      # fixable. They are outside this change's scope, so the choice is between
+      # excluding tests/ silently and reporting it in the open. This is the
+      # second. Fix them and change this step to a plain `ruff check tests`.
+      - name: Lint the test suite (advisory - see the comment above)
+        continue-on-error: true
+        run: ruff check tests
+        working-directory: detector
+
+      # TWO DESELECTS, and they are not a workaround for a broken test - they
+      # are the consequence of this job being the only place the suite is run
+      # without the CV stack.
+      #
+      # Both deselected tests are HARNESS GUARDS. The suite proves that the
+      # composition root and the publisher can be imported with torch, cv2,
+      # ultralytics and kafka blocked - that is the headline regression against
+      # aiModule.py, which built a KafkaProducer at module scope and so could not
+      # be imported at all without a broker. A block only proves something if the
+      # thing being blocked is otherwise importable, so these two assert exactly
+      # that: "all four are installed here, therefore blocking them is not
+      # vacuous."
+      #
+      # In a developer's `.[dev,cv]` virtualenv that is true and the guards pass.
+      # In THIS job it is false by construction - the whole point is that nothing
+      # heavy is installed - so they fail, correctly, saying "blocking it proves
+      # nothing here". Which is a true statement about the environment, not a
+      # defect in the code.
+      #
+      # So they run in detector-integration instead, where the CV stack IS
+      # present and the guarantee they protect is real. That job runs the FULL
+      # suite rather than only the marked tier, precisely so these two are not
+      # orphaned - see the comment there.
+      #
+      # If you are adding a test and find yourself wanting a third deselect,
+      # that test almost certainly needs the `requires_ultralytics` marker
+      # instead, which is the mechanism built for this.
+      - name: Run the fast tier (414 tests, no CV stack, ~0.5 s)
+        working-directory: detector
+        run: |
+          pytest -m "not requires_ultralytics" -rs \
+            --deselect tests/test_main.py::test_the_blocked_roots_are_installed_so_blocking_them_means_something \
+            --deselect tests/test_publisher.py::test_kafka_is_installed_so_blocking_it_means_something
+
+      # A composition-root smoke test. The unit suite covers every rule module,
+      # but nothing in it starts the actual program - and __main__.py is where
+      # the argument parser, the config layering and the wiring live. `--help`
+      # exercises the parser and proves the console script entry point resolves,
+      # on a machine with no CV stack, in milliseconds.
+      #
+      # Note this is `--help`, not `--dry-run`. --dry-run runs the real pipeline
+      # and so needs opencv to open a source and ultralytics to load weights;
+      # it is a fine local smoke check and it belongs in the integration job,
+      # not in the one that must not install those things.
+      - name: Smoke-test the entry point
+        run: |
+          python -m worksite_detector --help > /dev/null
+          worksite-detector --help > /dev/null
+        working-directory: detector
+
+  # ---------------------------------------------------------------------------
+  # web - Vite. This module was being migrated from Create React App while this
+  # workflow was written; see the ASSUMPTIONS block below.
+  # ---------------------------------------------------------------------------
+  web:
+    name: web (build + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # `npm ci`, never `npm install`. ci fails when package.json and
+      # package-lock.json have drifted apart; install would quietly resolve a
+      # different tree and REWRITE THE LOCK, so CI would be testing a dependency
+      # set nobody reviewed and the failure would be invisible.
+      #
+      # This is also the most likely way this job breaks first: the Vite
+      # migration regenerates the lockfile, and a commit that lands package.json
+      # without it fails here. That is the check working.
+      - name: Install (npm ci)
+        run: npm ci --no-audit --no-fund
+        working-directory: web
+
+      - name: Test
+        run: npm test
+        working-directory: web
+
+      - name: Build
+        run: npm run build
+        working-directory: web
+
+      # ---------------------------------------------------------------------
+      # ASSUMPTIONS - things read from a module that was changing as this was
+      # written. Each is stated so it can be checked rather than trusted:
+      #
+      #  * `npm test` is `vitest run` - a single pass that exits. Vitest's
+      #    default `vitest` is a WATCHER and would hang this job until the
+      #    25-minute timeout. package.json currently splits them correctly
+      #    (`test` = `vitest run`, `test:watch` = `vitest`); if `test` is ever
+      #    changed to the watcher, add `-- --run` here.
+      #  * The build output is `build/`, not Vite's default `dist/`. vite.config
+      #    sets `outDir: 'build'` deliberately to keep the CRA contract that
+      #    .gitignore and the README already document. The step above does not
+      #    depend on which it is; web/Dockerfile accepts either.
+      #  * Node 22 is a choice, not a reading: package.json declares no
+      #    `engines` field. Vite 8 requires Node 20.19+/22.12+, so 22 is the
+      #    lowest safe LTS. Pin `engines` in package.json and this becomes a
+      #    fact instead of an assumption.
+      # ---------------------------------------------------------------------
+      - name: Publish the built bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: |
+            web/build/
+            web/dist/
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # detector-integration - torch, opencv, ultralytics, real tensors.
+  #
+  # NOT on pull requests. `if:` rather than a separate `on:` block so that the
+  # job still appears in the run's job list with a "skipped" status, which tells
+  # a reviewer it exists; a second workflow file would just be invisible.
+  # ---------------------------------------------------------------------------
+  detector-integration:
+    name: detector (integration, CV stack)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: detector/pyproject.toml
+
+      # CPU wheels, from PyTorch's own index. The PyPI torch wheel for
+      # linux/amd64 bundles the CUDA runtime, cuDNN and cuBLAS: ~2.5 GB down and
+      # over 6 GB unpacked, on a runner with no GPU. Installing the CPU build
+      # first satisfies ultralytics' `torch>=1.8` so the resolver below leaves it
+      # alone. Same trick, same reason, as detector/Dockerfile.
+      - name: Install CPU-only torch
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision
+
+      - name: Install the detector with the CV extra
+        run: pip install -e ".[dev,cv]"
+        working-directory: detector
+
+      # WHAT THIS TIER CAN AND CANNOT CHECK ON CI.
+      #
+      # The weights are gitignored - they are what made this repository 250 MB
+      # before the v1.0.0 history rewrite - so the runner has neither.
+      # tests/integration/conftest.py handles that gracefully: the `pose_weights`
+      # and `ppe_weights` fixtures call pytest.skip when the file is absent, so
+      # the tests that need a model skip individually and the ones that only
+      # need opencv (frame source, sink, annotate) still run.
+      #
+      # yolov8s-pose.pt IS publicly downloadable, so it is fetched here and a
+      # good part of the tier that would otherwise skip actually runs.
+      # best.pt is NOT: it is this project's own trained model and exists only
+      # as a release asset. Tests that need it skip on CI, always, and there is
+      # no arrangement of this workflow that changes that.
+      #
+      # Best-effort on purpose: an ultralytics release asset moving should show
+      # up as more skips and a printed warning, not as a red build on a
+      # codebase nobody touched.
+      - name: Fetch the public pose weights (best effort)
+        continue-on-error: true
+        working-directory: detector
+        run: |
+          mkdir -p models
+          url="https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8s-pose.pt"
+          if curl -sSfL --retry 3 --max-time 300 -o models/yolov8s-pose.pt "$url"; then
+            echo "Fetched $(du -h models/yolov8s-pose.pt | cut -f1) of pose weights."
+          else
+            echo "::warning::Could not fetch yolov8s-pose.pt from $url."
+            echo "::warning::Tests needing pose weights will skip. This is not a code failure."
+            rm -f models/yolov8s-pose.pt
+          fi
+
+      # THE FULL SUITE, not `-m requires_ultralytics`.
+      #
+      # Running only the marked tier here would leave two tests running nowhere.
+      # tests/test_main.py and tests/test_publisher.py each carry an UNMARKED
+      # harness guard asserting that torch, cv2, ultralytics and kafka are
+      # importable - the precondition that makes this project's import-blocking
+      # tests mean anything. detector-unit has to deselect them because it
+      # deliberately installs none of those; if this job filtered to the marked
+      # tier it would not pick them up either, and a guard that runs in no CI
+      # job is a guard that silently stops guarding.
+      #
+      # The unmarked tier costs about half a second on top, so there is no
+      # reason to be clever about it.
+      #
+      # -rs prints the reason for every skip. Without it, a run that skipped 40
+      # tests because best.pt was missing is indistinguishable from a run that
+      # genuinely exercised the models - which is this job's central failure
+      # mode, given the weights can never be fully present here.
+      - name: Run the full suite (unit + integration, with the CV stack)
+        run: pytest -rs
+        working-directory: detector
+
+      # The end-to-end command a human would actually run, against a clip built
+      # here from the sample images that ship INSIDE the ultralytics package -
+      # the same two files tests/integration/conftest.py builds its fixtures
+      # from, and the only footage available to CI. No worksite clip ships with
+      # this repository: video of identifiable people is not redistributable.
+      #
+      # This exercises the whole composition root - config layering, weight
+      # checks, adapter construction, the frame loop, the shutdown flush and the
+      # dry-run summary - which no unit test does and no fixture-level
+      # integration test does either.
+      #
+      # It needs BOTH sets of weights, so on CI it is skipped, always: best.pt is
+      # this project's own trained model and is not fetchable here. Written as a
+      # skip rather than dropped because it does run - locally, and in any fork
+      # that has the release assets - and a step that silently does not exist
+      # cannot be noticed and turned on.
+      - name: Smoke-test the real pipeline (only if both weights are present)
+        working-directory: detector
+        run: |
+          if [ ! -f models/yolov8s-pose.pt ] || [ ! -f models/best.pt ]; then
+            echo "Skipped: needs both models/yolov8s-pose.pt and models/best.pt."
+            echo "best.pt is a release asset of this repository and is not fetchable here."
+            exit 0
+          fi
+          python - <<'PY'
+          import cv2, numpy as np
+          from ultralytics.utils import ASSETS
+          size = (1280, 720)
+          frames = [cv2.resize(cv2.imread(str(ASSETS / n)), size) for n in ("bus.jpg", "zidane.jpg")]
+          writer = cv2.VideoWriter("smoke.mp4", cv2.VideoWriter_fourcc(*"mp4v"), 25, size)
+          for image in frames:
+              for n in range(100):  # a slow pan, so consecutive frames differ
+                  shift = np.float32([[1, 0, (n % 40) - 20], [0, 1, 0]])
+                  writer.write(cv2.warpAffine(image, shift, size))
+          writer.release()
+          PY
+          python -m worksite_detector --dry-run --source smoke.mp4 --no-display
+
+  # ---------------------------------------------------------------------------
+  # secrets - gitleaks.
+  # ---------------------------------------------------------------------------
+  #
+  # ================== READ THIS BEFORE TRUSTING A GREEN TICK ==================
+  #
+  # THIS JOB WOULD NOT HAVE CAUGHT ANY OF THE FOUR CREDENTIALS THAT WERE
+  # ACTUALLY COMMITTED TO THIS REPOSITORY.
+  #
+  # That is not a guess and it is not pessimism. It was checked against
+  # gitleaks' own rule source - cmd/generate/config/rules/generic.go, the
+  # `generic-api-key` rule, which is the only rule any of the four could plausibly
+  # match. Two properties of that rule decide it:
+  #
+  #   1. An allowlist regex `^[a-zA-Z_.-]+$`. Anything made only of letters
+  #      (and _ . -) is discarded before it is ever reported. A Gmail app
+  #      password is SIXTEEN LOWERCASE LETTERS. It matches that allowlist
+  #      exactly, so the one credential in this repository with real-world
+  #      blast radius is the one the rule is guaranteed to throw away. The
+  #      allowlist is there to suppress ordinary English words in config files;
+  #      it cannot tell one from a Google-issued credential, because at the level
+  #      of a regex they are the same shape.
+  #
+  #   2. An entropy floor of 3.5. Short ASCII secrets - the AES key that was a
+  #      16-character literal in PasswordService.java, and the JWT signing key -
+  #      score under it and are dropped for being "not random enough".
+  #
+  # So: FOUR FOR FOUR, MISSED. A green tick on this job means "no secret shaped
+  # like the ones gitleaks anticipates was found". It does not mean the
+  # repository is clean, and it never did. The four real ones were found by a
+  # person reading application.yml and PasswordService.java, which remains the
+  # only method with a record of working here.
+  #
+  # Keep the job anyway - it costs seconds and it catches the categories with
+  # unambiguous shapes: AWS keys, GitHub and Slack tokens, private key PEM
+  # blocks, service-account JSON. It is a net for the patterns nobody
+  # anticipated. It is not evidence, and it is not a substitute for review.
+  #
+  # And note what it CANNOT do at all: the history rewrite removed those four
+  # from this repository, but not from forks, clones, CI caches or anything that
+  # mirrored it while they were public. Only revocation fixes that. See the
+  # comments in engine/src/main/resources/application.yml.
+  # ===========================================================================
+  secrets:
+    name: secrets (gitleaks - see the comment, a pass proves little)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      # Pinned rather than "latest": a scanner that silently changes its ruleset
+      # under you is a scanner whose green tick means something different every
+      # week.
+      #
+      # DEPENDABOT CANNOT BUMP THIS. It is a version in a shell script, not an
+      # action reference or a manifest entry, so none of the four ecosystems in
+      # dependabot.yml sees it. That is a deliberate trade: the official
+      # gitleaks-action requires a paid GITLEAKS_LICENSE for repositories owned
+      # by an ORGANISATION, and this repository is headed for exactly that. An
+      # unmaintainable pin is better than a required check that turns red the
+      # day the project moves into an org. Check this version by hand
+      # occasionally, or swap in the action once a licence exists.
+      GITLEAKS_VERSION: "8.28.0"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history. `gitleaks git` walks commits, and the whole point of a
+          # secret scanner is that a credential deleted in the next commit is
+          # still a leaked credential. With the default fetch-depth of 1 this
+          # would scan exactly one commit and pass, always, on anything.
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: |
+          curl -sSfL --retry 3 \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks version
+
+      # --config is not optional: with the DEFAULT ruleset this scan reports
+      # EIGHT findings against this repository, and all eight are deliberately
+      # fake credentials in engine's test fixtures - the ones
+      # ProductionConfigurationTest needs in order to assert that production has
+      # no such defaults. A job that is red on the day it is added, for reasons
+      # nobody can fix, teaches everyone within a week that its red X means
+      # nothing. .github/gitleaks.toml suppresses exactly those paths and
+      # documents the cost of doing so.
+      #
+      # `git` rather than `dir`: the scanner walks commits, because a credential
+      # deleted in the next commit is still a leaked credential. It also means
+      # only COMMITTED content is scanned - an uncommitted local .env is not
+      # this job's business, and the .gitignore is.
+      #
+      # --redact, so a finding does not print the secret into a public build log
+      # and leak it a second time in the course of reporting it.
+      - name: Scan history
+        run: |
+          ./gitleaks git . \
+            --config .github/gitleaks.toml \
+            --redact --no-banner \
+            --report-format sarif --report-path gitleaks.sarif
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-report
+          path: gitleaks.sarif
+          if-no-files-found: ignore
+          retention-days: 14

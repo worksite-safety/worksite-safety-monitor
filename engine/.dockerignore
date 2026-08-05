@@ -1,0 +1,26 @@
+# Everything the build stage does not read. Keeping the context small is not
+# only about speed: a stray file here is a file that can end up in an image
+# layer, and this repository has already leaked one signing key.
+
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Local secrets. application.yml resolves JWT_SECRET, PASSWORD_RESET_AES_KEY and
+# the two MAIL_* variables from the environment with NO defaults; a developer's
+# local answers live in these files and must never be baked into an image.
+.env
+.env.*
+!.env.example
+src/main/resources/application-local.yml
+src/main/resources/application-local.properties
+
+# IDE and OS noise.
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+HELP.md
+Dockerfile
+.dockerignore

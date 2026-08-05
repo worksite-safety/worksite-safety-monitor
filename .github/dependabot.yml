@@ -1,0 +1,123 @@
+# Dependency updates for all four ecosystems this repository actually uses.
+#
+# Grouped and rate-limited on purpose. Ungrouped Dependabot on a project with a
+# Spring Boot POM, a Vite front end and a CV stack opens twenty pull requests in
+# the first week, each needing its own CI run and its own review; the reliable
+# outcome is that all twenty are ignored and the security ones are ignored with
+# them. Grouping minor and patch bumps into one PR per ecosystem per week keeps
+# the number small enough to actually read - and MAJOR bumps are deliberately
+# left ungrouped, because those are the ones that need a human.
+
+version: 2
+
+updates:
+
+  # ---------------------------------------------------------------------------
+  # engine - Maven.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: maven
+    directory: /engine
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      maven-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Spring Boot 3.0.4 -> 3.5.x is a migration, not a bump: it moves
+      # spring-kafka from a ZooKeeper broker to KRaft, changes Spring Security
+      # 6.0 request-matcher APIs that SecurityConfiguration uses directly, and
+      # is exactly the upgrade the Testcontainers-based integration tier was
+      # written to be a trustworthy oracle for. A Dependabot PR cannot do it and
+      # would sit open failing CI forever. Do it deliberately, in its own branch.
+      - dependency-name: org.springframework.boot:spring-boot-starter-parent
+        update-types: [version-update:semver-major, version-update:semver-minor]
+    commit-message:
+      prefix: "build(engine)"
+    labels: ["dependencies", "engine"]
+
+  # ---------------------------------------------------------------------------
+  # web - npm.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+      # React and its ecosystem move together. Bumping react without react-dom
+      # produces a lockfile that installs and an app that does not render, and
+      # the failure surfaces in the browser rather than in CI.
+      react:
+        patterns: ["react", "react-dom", "react-router-dom", "@types/react*"]
+    commit-message:
+      prefix: "build(web)"
+    labels: ["dependencies", "web"]
+
+  # ---------------------------------------------------------------------------
+  # detector - pip.
+  #
+  # Dependabot reads dependencies and optional-dependencies out of
+  # pyproject.toml. There is no lockfile, so these are constraint bumps: what
+  # gets reviewed is the RANGE, not a resolved tree.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: pip
+    directory: /detector
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      pip-minor-and-patch:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # `ultralytics>=8.3,<8.4` is pinned to a minor series on purpose, and the
+      # upper bound is load bearing. annotate.py imports
+      # ultralytics.utils.plotting.Annotator for its COCO skeleton table, and
+      # that module has already moved once in this project's lifetime -
+      # aiModule.py imports it from ultralytics.yolo.utils.plotting, a path
+      # deleted in 8.1, which is why the original file cannot be executed at all
+      # today. The integration tier is what would catch the next move, and it
+      # runs nightly rather than on every PR, so an automated minor bump could
+      # merge on a green PR and break the detector until the next night.
+      - dependency-name: ultralytics
+        update-types: [version-update:semver-major, version-update:semver-minor]
+    commit-message:
+      prefix: "build(detector)"
+    labels: ["dependencies", "detector"]
+
+  # ---------------------------------------------------------------------------
+  # GitHub Actions.
+  #
+  # NOTE what this does NOT cover: the pinned GITLEAKS_VERSION in ci.yml. That
+  # is a version string inside a shell step, not an action reference, so nothing
+  # here can see it. The reason it is a shell step at all is in the comment
+  # beside it in ci.yml.
+  # ---------------------------------------------------------------------------
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies", "ci"]
