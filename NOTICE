@@ -1,0 +1,120 @@
+Worksite Safety Monitor
+Copyright (c) 2023-2026 the Worksite Safety Monitor contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. The full text is in LICENSE.
+
+Contributors, per the commit history and .mailmap:
+
+    Aziz Can Guveli
+    Emre Yilmaz
+    Nil Emekci
+
+
+================================================================================
+Third-party work this project derives from
+================================================================================
+
+This file records source that was taken from other projects and modified. It is
+not a dependency list: ordinary declared dependencies (Spring Boot, React, MUI,
+recharts, PyYAML, ...) are fetched by the build and are not redistributed here.
+
+Two upstreams are recorded, under two different licences. Both permit being
+combined into an AGPL-3.0-or-later whole, which is what this project is.
+detector/src/worksite_detector/annotate.py carries the same attribution in its
+module docstring, because that is the file where both upstreams survive; the two
+are meant to be read together and to say the same thing.
+
+
+--------------------------------------------------------------------------------
+1. Ultralytics YOLO  --  AGPL-3.0-or-later
+   https://github.com/ultralytics/ultralytics
+--------------------------------------------------------------------------------
+
+AGPL-3.0-or-later, the same licence as this project. (An earlier draft of this
+file recorded Ultralytics as Apache-2.0. That was wrong and is corrected here.)
+
+What is used, and where:
+
+  * detector/src/worksite_detector/annotate.py declares `PlanAnnotator`, a
+    subclass of `ultralytics.utils.plotting.Annotator`. The base class, its
+    19-pair skeleton table and its two colour palettes are used as they ship;
+    `box_label`, `text` and `result` are inherited unchanged.
+
+  * `PlanAnnotator.kpts` is a rewrite of `Annotator.kpts`, not a copy of it.
+    Every decision the upstream method makes was moved into
+    detector/src/worksite_detector/draw_plan.py, which is pure arithmetic
+    returning drawing instructions; annotate.py only executes them.
+
+Modifications to the inherited drawing behaviour, stated in annotate.py and
+repeated here:
+
+  * `conf_thres` defaults to 0.5, where the base class defaults to 0.25.
+  * `radius` defaults to 5, where the base class defaults to `self.lw`.
+  * `kpt_line=False` is expressed as an empty `show_skeleton` collection.
+
+Ultralytics YOLO is also the framework the detector runs both models with, and
+the framework detector/models/best.pt was trained with: it is a fine-tune of the
+`yolov8m.pt` checkpoint (see detector/training/train-args.yaml and
+detector/training/training-commands.md). Neither weights file is committed --
+.gitignore excludes `*.pt` -- and the detector refuses to start without them,
+printing where to obtain them.
+
+
+--------------------------------------------------------------------------------
+2. yuyoujiang/Exercise-Counter-with-YOLOv8-on-NVIDIA-Jetson  --  Apache-2.0
+   https://github.com/yuyoujiang/Exercise-Counter-with-YOLOv8-on-NVIDIA-Jetson
+--------------------------------------------------------------------------------
+
+Licensed under the Apache License, Version 2.0. A copy is included at
+docs/third-party/apache-2.0.txt. This section is the attribution notice that
+Apache-2.0 section 4(b) requires be retained, and the statement of changes that
+section 4(b) requires be carried in the modified files.
+
+What was taken:
+
+  * Its `_Annotator.kpts` contributed the `show_points` / `show_skeleton`
+    keypoint and limb filters and the `plot_size_redio` overlay scaling.
+  * Its per-gesture table -- keypoint indices plus a maintain/relax angle pair
+    per gesture -- was adopted together with that annotator.
+
+Both entered this project as detector/aiModule.py (the annotator at lines
+91-143, the gesture table as `sport_list` at the top of the file). aiModule.py
+is still in the tree, unmodified, as the artifact the current detector was
+rewritten from; it is not executed by anything and is not importable on current
+Ultralytics releases.
+
+Where the work survives today:
+
+  * The two filters and the size scaling are the `show_points`,
+    `show_skeleton` and `size_ratio` parameters of `PlanAnnotator.kpts`, with
+    the decisions they drive implemented in draw_plan.py.
+  * The gesture table is `_DEFAULT_GESTURES` in
+    detector/src/worksite_detector/config.py.
+
+Modifications made by this project (Apache-2.0 section 4(b)):
+
+  * The gesture table was reduced from three entries to two, ARMS_UP and
+    FRONT_BEND. The third entry, `frontbending`, measures a bend from ear
+    keypoints 3 and 4 whose visibility nothing checks; it was deleted rather
+    than revived. FRONT_BEND carries the numbers of the table's `bending`
+    entry, because that is the entry the adopting code actually read.
+  * Each gesture now declares a visibility gate, and the gate must cover every
+    keypoint the gesture's angle -- and its posture precondition -- is measured
+    from. A configuration that breaks that rule is refused at load time.
+  * The left and right angles are measured independently and averaged only over
+    the sides that passed their own gate. The adopted code averaged both sides
+    unconditionally.
+  * Gesture state is keyed by an externally supplied person id instead of a
+    person's position in one frame's model output, and the hysteresis latch
+    re-arms after each completed repetition instead of latching once.
+  * The overlay's "skip this keypoint" test was changed from a modulo against
+    the frame size to an exact (0, 0) comparison, and negative coordinates are
+    refused for keypoints as well as for limbs.
+  * The on-frame repetition-counter banner and the mp4 writer are not
+    reproduced.
+  * The Kafka publisher, the PPE violation windows, the fall throttle, the
+    configuration layer and the entry point are this project's own and have no
+    counterpart upstream.

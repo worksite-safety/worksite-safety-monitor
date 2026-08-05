@@ -13,7 +13,7 @@
 *.mp4 binary
 
 # Generated / vendored files: exclude from language statistics and diffs.
-designer/package-lock.json linguist-generated=true -diff
+web/package-lock.json linguist-generated=true -diff
 engine/.mvn/** linguist-vendored=true
 engine/mvnw    text eol=lf
 engine/mvnw.cmd text eol=crlf

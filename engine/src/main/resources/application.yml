@@ -153,12 +153,18 @@ event:
     # knob that lets the two sides deploy independently:
     #
     #   SECONDS  the producer in the field before the detector rewrite (int(seconds))
-    #   MILLIS   the rewritten detector
+    #   MILLIS   the rewritten detector, which ships in this release
     #
-    # FLIP THIS TO MILLIS AS PART OF THE DETECTOR RELEASE. Until then it must stay SECONDS:
-    # a millisecond producer read as seconds stores 33 ms flickers as if they were violations,
-    # and a seconds producer read as milliseconds stores nothing at all. Both are silent.
-    input-unit: SECONDS
+    # Both misreadings are silent, and they fail in opposite directions: a millisecond producer
+    # read as SECONDS multiplies every duration by 1000, so a 6.5 second violation is stored as
+    # though it lasted an hour and 48 minutes and every periodic chart is a thousand times too
+    # tall; a seconds producer read as MILLIS stores nothing at all, because no real violation
+    # clears a 3000 threshold expressed in the wrong unit.
+    #
+    # MILLIS is correct for the detector in this repository. Set it back to SECONDS only if you
+    # are running the pre-rewrite producer against this engine - and if you do, run the migration
+    # below first or your collection will hold both units at once.
+    input-unit: MILLIS
     # The shortest periodic violation worth storing. Was event.fall.threshold.value: 3, which
     # named the wrong event family and carried no unit; 3 meant 3 seconds. Storage and this
     # threshold are both milliseconds now, so the same intent is 3000.

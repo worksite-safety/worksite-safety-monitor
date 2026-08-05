@@ -360,9 +360,12 @@ pyrightconfig.json
 # IDE module metadata
 *.iml
 
-# Model weights. best.pt ships as a GitHub Release asset; yolov8s-pose.pt is
-# downloaded by ultralytics at runtime. Neither belongs in git — they are what
-# made this repository 250 MB before the v1.0.0 history rewrite.
+# Model weights. Both ship as GitHub Release assets and both must be downloaded
+# into detector/models/ by hand: the detector refuses to start when either is
+# missing, precisely so ultralytics cannot silently fetch a stock model under a
+# recognised filename and run it in place of the one this project trained.
+# Neither belongs in git - they are what made this repository 250 MB before the
+# v1.0.0 history rewrite.
 *.pt
 
 # Training runs and the detector's per-frame output image are runtime artifacts.
