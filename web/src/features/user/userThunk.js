@@ -29,11 +29,8 @@ export const clearStoreThunk = async (message, thunkAPI) => {
 };
 export const updateUserThunk = async (url, user, thunkAPI) => {
     try {
-        const resp = await customFetch.put(`/auth/update-user/${thunkAPI.getState().user.user.id}`, user, {
-            headers: {
-                Authorization: `Bearer ${thunkAPI.getState().user.user.token}`,
-            },
-        });
+        const resp = await customFetch.put(
+            `/auth/update-user/${thunkAPI.getState().user.user.id}`, user);
         return resp.data;
     } catch (error) {
         if (error.response.status === 403) {
@@ -48,7 +45,6 @@ export const updateUserProfilePictureThunk = async (url, formData, thunkAPI) => 
     try {
         const response = await customFetch.post(url, formData, {
             headers: {
-                Authorization: `Bearer ${thunkAPI.getState().user.user.token}`,
                 'Content-Type': 'multipart/form-data',
             },
         });

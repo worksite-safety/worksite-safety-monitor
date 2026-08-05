@@ -1,0 +1,29 @@
+# node_modules above all: it is the single largest thing in this directory and
+# copying it in would also shadow the tree `npm ci` just installed, mixing a
+# host platform's native binaries into a linux image.
+node_modules/
+build/
+dist/
+coverage/
+
+# Every local env file, plain `.env` included. This is not only hygiene: Vite
+# loads .env at build time and a variable in it BEATS nothing but is read
+# alongside the VITE_API_URL build arg this image sets, so a developer's local
+# .env riding into the build context produces a bundle pointing at their
+# machine's API - on their laptop only, with nothing printed either way. The
+# `!.env.example` re-include keeps the documentation.
+.env
+.env.*
+!.env.example
+
+.git/
+.idea/
+.vscode/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Dockerfile
+.dockerignore
+README.md

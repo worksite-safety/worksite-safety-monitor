@@ -112,50 +112,53 @@ const userSlice = createSlice({
             removeUserFromLocalStorage();
         },
     },
-    extraReducers: {
-        [registerUser.pending]: (state) => {
-            state.isLoading = true;
-        },
-        [registerUser.fulfilled]: (state, {payload}) => {
-            const {user} = payload;
-            state.isLoading = false;
-            state.user = user;
-            addUserToLocalStorage(user);
-            toast.success(`Hello There ${user.name}`);
-        },
-        [registerUser.rejected]: (state, {payload}) => {
-            state.isLoading = false;
-            toast.error(payload);
-        },
-        [loginUser.pending]: (state) => {
-            state.isLoading = true;
-        },
-        [loginUser.fulfilled]: (state, {payload}) => {
-            const {user} = payload;
-            state.isLoading = false;
-            state.user = user;
-            addUserToLocalStorage(user);
-            toast.success(`Hello There ${user.name}`);
-        },
-        [loginUser.rejected]: (state, {payload}) => {
-            state.isLoading = false;
-            toast.error(payload);
-        },
-        [updateUser.pending]: (state) => {
-            state.isLoading = true;
-        },
-        [updateUser.fulfilled]: (state, {payload}) => {
-            const {user} = payload;
-            state.isLoading = false;
-            state.user = user;
+    // Builder-callback form. The object-map form this used to be was removed in
+    // Redux Toolkit 2.x -- it silently matched nothing rather than failing.
+    extraReducers: (builder) => {
+        builder
+            .addCase(registerUser.pending, (state) => {
+                state.isLoading = true;
+            })
+            .addCase(registerUser.fulfilled, (state, {payload}) => {
+                const {user} = payload;
+                state.isLoading = false;
+                state.user = user;
+                addUserToLocalStorage(user);
+                toast.success(`Hello There ${user.name}`);
+            })
+            .addCase(registerUser.rejected, (state, {payload}) => {
+                state.isLoading = false;
+                toast.error(payload);
+            })
+            .addCase(loginUser.pending, (state) => {
+                state.isLoading = true;
+            })
+            .addCase(loginUser.fulfilled, (state, {payload}) => {
+                const {user} = payload;
+                state.isLoading = false;
+                state.user = user;
+                addUserToLocalStorage(user);
+                toast.success(`Hello There ${user.name}`);
+            })
+            .addCase(loginUser.rejected, (state, {payload}) => {
+                state.isLoading = false;
+                toast.error(payload);
+            })
+            .addCase(updateUser.pending, (state) => {
+                state.isLoading = true;
+            })
+            .addCase(updateUser.fulfilled, (state, {payload}) => {
+                const {user} = payload;
+                state.isLoading = false;
+                state.user = user;
 
-            addUserToLocalStorage(user);
-            toast.success('Password Changed Successfully!');
-        },
-        [updateUser.rejected]: (state, {payload}) => {
-            state.isLoading = false;
-            toast.error(payload);
-        }
+                addUserToLocalStorage(user);
+                toast.success('Password Changed Successfully!');
+            })
+            .addCase(updateUser.rejected, (state, {payload}) => {
+                state.isLoading = false;
+                toast.error(payload);
+            });
     }
 
 });

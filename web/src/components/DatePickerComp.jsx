@@ -24,12 +24,7 @@ const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) =>
       try {
         const response = await customFetch.post(
             `/event/sendPdfEmail/${startDate.getTime()}/${endDate.getTime()}/${user.email}`,
-            {},
-            {
-              headers: {
-                Authorization: `Bearer ${user.token}`,
-              },
-            }
+            {}
         );
         if (response.status === 200) {
           toast.success("Report sent successfully!");

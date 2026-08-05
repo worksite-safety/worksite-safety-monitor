@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './videoStream.css';
+import { apiBaseUrl } from '../util/axios';
+
 const VideoStream = () => {
     const [imageUrl, setImageUrl] = useState('');
     const [error, setError] = useState(false);
@@ -11,7 +13,9 @@ const VideoStream = () => {
 
     useEffect(() => {
         const intervalId = setInterval(() => {
-            const newImageUrl = `http://localhost:8080/event/get_image/${new Date().getTime()}`;
+            // Loaded by the browser as an <img> src, not through axios, so it
+            // needs the base URL directly. The timestamp is a cache-buster.
+            const newImageUrl = `${apiBaseUrl}/event/get_image/${new Date().getTime()}`;
             updateArray(newImageUrl);
         }, 100);
 

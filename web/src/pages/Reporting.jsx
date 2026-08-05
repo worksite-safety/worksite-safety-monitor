@@ -34,11 +34,7 @@ export default function ControlledSort() {
   const fetchCountableEventsData = async (startDate, endDate) => {
     setLoading(true);
     try {
-      const response = await customFetch.get('event/all-events', {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+      const response = await customFetch.get('event/all-events');
 
       const jsonData = response.data;
 
@@ -75,11 +71,7 @@ export default function ControlledSort() {
 
   const handleDeleteRow = async (id) => {
     try {
-      const response = await customFetch.delete(`event/delete-events/${id}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`,
-        },
-      });
+      const response = await customFetch.delete(`event/delete-events/${id}`);
 
       if (response.status === 200) {
         const updatedRows = rows.filter((row) => row.id !== id);
@@ -100,12 +92,11 @@ export default function ControlledSort() {
   const fetchEventsData = async (startDate, endDate) => {
     setLoading(true);
     try {
+      // The second argument is the request body, not config -- the old spelling
+      // passed `{headers: {...}}` as the body, so the token was never actually
+      // sent here. The request interceptor now attaches it either way.
       const response = await customFetch.post(
-          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          });
+          `/event/sendPdfEmail/${startDate}/${endDate}/${user.email}`, {});
 
       const jsonData = response.data;
       toast.success("Report sent successfully!");

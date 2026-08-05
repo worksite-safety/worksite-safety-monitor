@@ -113,12 +113,7 @@ const ChartsContainer = () => {
     setLoading(true);
     try {
       const response = await customFetch.get(
-          `event/countable-events/${startDate}/${endDate}`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          }
-      );
+          `event/countable-events/${startDate}/${endDate}`);
       const jsonData = response.data;
       setData(jsonData);
     } catch (error) {
@@ -132,12 +127,7 @@ const ChartsContainer = () => {
     setLoading(true);
     try {
       const response = await customFetch.get(
-          `event/periodic-events/${startDate}/${endDate}`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          }
-      );
+          `event/periodic-events/${startDate}/${endDate}`);
       const jsonData = response.data;
       setPeriodicEventsData(jsonData);
     } catch (error) {
@@ -151,12 +141,7 @@ const ChartsContainer = () => {
     setLoading(true);
     try {
       const response = await customFetch.get(
-          `event/pie-chart-events/${startDate}/${endDate}`, {
-            headers: {
-              Authorization: `Bearer ${user.token}`,
-            },
-          }
-      );
+          `event/pie-chart-events/${startDate}/${endDate}`);
       const jsonData = response.data;
       setPieChartData(jsonData);
     } catch (error) {

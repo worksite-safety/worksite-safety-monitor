@@ -1,46 +1,43 @@
 {
-  "name": "designer",
+  "name": "worksite-safety-monitor-web",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.5.1",
-    "@mui/joy": "^5.0.0-beta.22",
-    "@mui/material": "^5.11.13",
-    "@mui/x-data-grid": "^6.0.3",
-    "@reduxjs/toolkit": "^1.9.3",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.6.0",
-    "cors": "^2.8.5",
-    "date-fns": "^2.30.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "@mui/x-data-grid": "^6.19.0",
+    "@reduxjs/toolkit": "^2.12.0",
+    "axios": "^1.19.0",
     "react": "^18.2.0",
-    "react-date-range": "^1.4.0",
-    "react-datepicker": "^4.11.0",
+    "react-datepicker": "^4.25.0",
     "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
-    "react-redux": "^8.0.5",
-    "react-router-dom": "^6.17.0",
-    "react-scripts": "5.0.1",
+    "react-redux": "^9.3.0",
+    "react-router-dom": "^7.18.2",
     "react-toastify": "^9.1.3",
-    "recharts": "^2.1.13",
-    "socket.io-client": "^4.7.3",
-    "styled-components": "^6.1.0",
-    "web-vitals": "^2.1.4"
+    "recharts": "^2.15.0",
+    "styled-components": "^6.5.0"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@vitejs/plugin-react": "^6.0.5",
+    "jsdom": "^29.1.1",
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "browserslist": {
     "production": [

@@ -15,7 +15,13 @@ const initialState = {
 function ChangePassword() {
     const query = new URLSearchParams(useLocation().search);
 
-    const [values, setValues] = useState({...initialState, secretKey: query.get("token").replace(/ /g, '+')});
+    // The engine now percent-encodes the reset token when it builds the link
+    // (MailService: URLEncoder.encode(...)), so URLSearchParams hands back the
+    // exact Base64 string. The old `.replace(/ /g, '+')` patched a `+` that had
+    // been decoded to a space by an unencoded link; it is a no-op today, and it
+    // threw a TypeError when the page was opened without a ?token= at all.
+    const [values, setValues] = useState(
+        {...initialState, secretKey: query.get("token") ?? ''});
 
     const dispatch = useDispatch();
     const {isLoading, user} = useSelector((store) => store.user);
