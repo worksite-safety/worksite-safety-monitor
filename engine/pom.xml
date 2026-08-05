@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.0.4</version>
+        <version>3.0.13</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.graduation.project</groupId>
@@ -16,14 +16,14 @@
     <properties>
         <java.version>17</java.version>
         <spring.boot.root.version>3.0.4</spring.boot.root.version>
-        <jjwt.version>0.11.5</jjwt.version>
-        <gson.version>2.9.1</gson.version>
+        <jjwt.version>0.13.0</jjwt.version>
+        <gson.version>2.14.0</gson.version>
         <org.mapstruct.version>1.5.5.Final</org.mapstruct.version>
         <spring-kafka.version>3.0.10</spring-kafka.version>
         <spring.boot.security.version>6.0.2</spring.boot.security.version>
         <swagger.openapi.version>2.0.0</swagger.openapi.version>
         <itext.pdf.version>5.5.13</itext.pdf.version>
-        <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
+        <jacoco.maven.plugin.version>0.8.15</jacoco.maven.plugin.version>
         <testcontainers.version>1.21.3</testcontainers.version>
         <!--
           Placeholder for JaCoCo's late-replaced @{argLine}. Surefire is configured with
