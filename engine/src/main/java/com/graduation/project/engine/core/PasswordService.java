@@ -26,11 +26,12 @@ import org.springframework.stereotype.Component;
  * request, so <b>anyone holding this key can mint a valid reset link for any address at any
  * time</b>.
  *
- * <p>The old literal is present in three blobs of this repository's git history as well as in the
- * working tree, so it must be treated as public. Relocating it to configuration does not undo that
- * disclosure - only issuing a new key does. Rotation invalidates every reset link that has already
- * been e-mailed, which is the correct outcome: those links are forgeable by anyone who can read
- * the history.
+ * <p>The old literal is present in three blobs of this repository's git history, so it must be
+ * treated as public. It is no longer in the working tree - commit 4363391 removed it from both
+ * this class and its test - but relocating it to configuration would not have undone the
+ * disclosure either; only issuing a new key does. Rotation invalidates every reset link that has
+ * already been e-mailed, which is the correct outcome: those links are forgeable by anyone who
+ * can read the history.
  *
  * <p><b>No default anywhere.</b> {@code src/main/resources/application.yml} reads
  * {@code ${PASSWORD_RESET_AES_KEY}} with no fallback, so a missing variable is a startup failure.

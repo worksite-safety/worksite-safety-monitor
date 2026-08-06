@@ -20,11 +20,12 @@ spring:
     #
     # REVOKE THE OLD ONE - it is not enough that it is gone from here. A Gmail app password was
     # committed in this field. It has been removed from the working tree and rewritten out of the
-    # history, but it was public for as long as it was pushed: it may sit in forks, in clones, in
-    # CI caches and in anything that mirrored this repository, none of which a history rewrite can
-    # reach. Until the password is revoked in the Google account that issued it, that account can
-    # still be used to send mail as this application. Revoke first, then issue a new app password
-    # and set it here through the environment.
+    # history, and the exposure is narrower than this kind of leak usually is: this repository and
+    # its predecessor are both private with 0 forks, so it was never world-readable. But it sat in
+    # every clone, CI cache and editor backup taken while it was pushed, and a history rewrite
+    # reaches none of those. Until the password is revoked in the Google account that issued it,
+    # that account can still be used to send mail as this application. Revoke first, then issue a
+    # new app password and set it here through the environment.
     password: ${MAIL_PASSWORD}
 
 

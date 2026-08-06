@@ -171,10 +171,18 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
 
 ## Outstanding, and blocking release
 
-1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY`.** Both old values are in git history. The
-   AES key is the urgent one: it encrypts the token that authorises a password change and that
-   token has no expiry, so anyone holding it can mint a reset link for any account.
-2. **Revoke the Gmail app password** at Google. Removed from history; that does not un-leak it.
+1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY` — done, and this entry says less than it
+   used to on purpose.** It claimed both old values were in git history. Only one was. The AES
+   literal is in three blobs (`fdbaece`, `87e2869`, `a88e320`; `4363391` removed it), and it stays
+   there deliberately — it is dead, nothing ever deployed with it, and a rewrite was judged not
+   worth breaking every SHA for. The JWT secret was **never** a value here: all five historical
+   `JwtService.java` blobs hold `SECRET_KEY = "${JWT_SECRET}"`, an unresolved placeholder, and a
+   scan of all 663 blobs in the object database finds no 64-hex string at all. Both values now in
+   `.env` appear in zero commits. Generate a pair with `scripts/init-env.sh`.
+2. **Revoke the Gmail app password** at Google. This is the only item still gating public release.
+   Removed from history; that does not un-leak it. The account is `coderunners24@gmail.com`, and
+   the exposure is narrow — this repository and its predecessor are both private with 0 forks — but
+   narrow is not zero, and every clone and CI cache taken while it was pushed still has it.
 3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
    August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
    it was the item everything else deferred to; 1 and 2 are what gate public release now.
