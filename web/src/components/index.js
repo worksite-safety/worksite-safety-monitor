@@ -10,6 +10,7 @@ import BarChart from "./BarChart";
 import LineChart from "./LineChartComponent";
 import AreaChart from "./AreaChart";
 import PieChartComponent from "./PieChartComponent";
+import DataTable from "./DataTable";
 
 export {
     NavBar,
@@ -23,5 +24,6 @@ export {
     BarChart,
     LineChart,
     AreaChart,
-    PieChartComponent
+    PieChartComponent,
+    DataTable
 }

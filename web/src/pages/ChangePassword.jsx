@@ -4,7 +4,7 @@ import Wrapper from '../assets/wrappers/RegisterPage';
 import {toast} from "react-toastify";
 import {useDispatch, useSelector} from "react-redux";
 import {changePassword} from "../features/user/userSlice";
-import {useLocation, useNavigate} from "react-router-dom";
+import {useLocation, useNavigate} from "react-router";
 
 const initialState = {
     password: '',

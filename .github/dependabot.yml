@@ -59,7 +59,7 @@ updates:
       # produces a lockfile that installs and an app that does not render, and
       # the failure surfaces in the browser rather than in CI.
       react:
-        patterns: ["react", "react-dom", "react-router-dom", "@types/react*"]
+        patterns: ["react", "react-dom", "react-router", "@types/react*"]
     commit-message:
       prefix: "build(web)"
     labels: ["dependencies", "web"]

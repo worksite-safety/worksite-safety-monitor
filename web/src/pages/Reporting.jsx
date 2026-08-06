@@ -1,15 +1,22 @@
 import * as React from 'react';
-import {DataGrid, GridToolbar} from '@mui/x-data-grid';
-import DateRangePickerComp from "../components/DatePickerComp";
 import {useState} from "react";
+import {createColumnHelper} from '@tanstack/react-table';
+import {MdDeleteOutline} from 'react-icons/md';
+import DateRangePickerComp from "../components/DatePickerComp";
+import DataTable from "../components/DataTable";
 import Wrapper from '../assets/wrappers/ChartsContainer';
 import {useSelector} from "react-redux";
 import customFetch, {checkForUnauthorizedResponse} from "../util/axios";
 import {toast} from "react-toastify";
-import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 const VISIBLE_FIELDS = ['eventType', 'startTime', 'confidencePercentage',
   'timePeriod', 'cameraName'];
+
+const columnHelper = createColumnHelper();
+
+// The grid identifies rows by the event id the engine sends, which is also
+// what the delete endpoint takes.
+const getRowId = (row) => row.id;
 
 export default function ControlledSort() {
   const [events, setEvents] = useState(
@@ -17,10 +24,10 @@ export default function ControlledSort() {
   const {isLoading, user} = useSelector((store) => store.user);
   const [rows, setRows] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [sortModel, setSortModel] = React.useState([
+  const [sorting, setSorting] = React.useState([
     {
-      field: 'startTime',
-      sort: 'desc',
+      id: 'startTime',
+      desc: true,
     },
   ]);
   const fieldLabels = {
@@ -114,24 +121,32 @@ export default function ControlledSort() {
       setLoading(false);
     }
   };
-  const [columns, setColumns] = React.useState([
-    ...VISIBLE_FIELDS.map((field) => ({
-      field,
-      headerName: fieldLabels[field] || field,
-      flex: 1,
+  // Held in state, not rebuilt per render: the table treats a new columns array
+  // as new columns. This is also why `handleDeleteRow` here is the one from the
+  // first render -- as it was when this list lived in `useState` for the
+  // DataGrid. It closes over the initial (empty) `rows`, so the optimistic
+  // filter below it clears the grid for as long as the refetch takes. That is
+  // the behaviour this page has always had; fixing it is a separate change.
+  const [columns] = React.useState(() => [
+    ...VISIBLE_FIELDS.map((field) => columnHelper.accessor(field, {
+      id: field,
+      header: fieldLabels[field] || field,
     })),
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      flex: 1,
-      sortable: false,
-      renderCell: (params) => (
-          <DeleteOutlineIcon
+    columnHelper.display({
+      id: 'actions',
+      header: 'Actions',
+      cell: ({row}) => (
+          <MdDeleteOutline
+              // MUI's icons are 24px by default and react-icons' are 1em, so
+              // the size is spelled out to keep the row looking the same.
+              size={24}
+              role="button"
+              aria-label="Delete"
               style={{cursor: 'pointer'}}
-              onClick={() => handleDeleteRow(params.row.id)}
+              onClick={() => handleDeleteRow(row.original.id)}
           />
       ),
-    },
+    }),
   ]);
   return (
       <div>
@@ -143,37 +158,14 @@ export default function ControlledSort() {
         </Wrapper>
 
         <div style={{height: 750, width: '100%'}}>
-          <DataGrid
+          <DataTable
               rows={rows}
               columns={columns}
               loading={loading}
-              sortModel={sortModel}
-              onSortModelChange={(newSortModel) => setSortModel(newSortModel)}
-              components={{
-                Toolbar: GridToolbar,
-              }}
-              componentsProps={{
-                toolbar: {
-                  showQuickFilter: true,
-                  quickFilterProps: {debounceMs: 500},
-                  csvOptions: {
-                    fileName: 'reportLocalExport',
-                  },
-                  printOptions: {
-                    hideFooter: true,
-                    hideToolbar: true,
-                  },
-                  exportOptions: () => ({
-                    csv: {
-                      fileName: 'reportLocalExport',
-                    },
-                    print: {
-                      hideFooter: true,
-                      hideToolbar: true,
-                    },
-                  }),
-                },
-              }}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              getRowId={getRowId}
+              exportFileName="reportLocalExport"
           />
         </div>
       </div>
