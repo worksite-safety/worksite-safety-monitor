@@ -26,7 +26,9 @@ Each module runs on its own. There is no top-level build. `docker compose up` ru
 pip install -e .[dev]                       # no torch, fast
 pip install -e .[cv]                        # ultralytics, opencv, kafka -- ~2 GB
 pytest -m "not requires_ultralytics"        # 418 pass in ~2 s, the inner loop
-pytest                                      # 481 collected: 465 pass, 16 skip, ~4 s
+pytest                                      # 481, ~8 s. 16 of them skip on a machine
+                                            # without the gitignored weights and baseline
+                                            # traces; with those present all 481 pass
 ruff check src tools
 python -m worksite_detector --dry-run --source clip.mp4
 ```
@@ -169,15 +171,29 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
 - A `FALL` emails **every registered user**.
 - One camera, one role, no refresh tokens, no Kafka schema registry, no volume on Kafka.
 
-## Outstanding, and blocking release
+## What used to block release, and why none of it does now
 
-1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY`.** Both old values are in git history. The
-   AES key is the urgent one: it encrypts the token that authorises a password change and that
-   token has no expiry, so anyone holding it can mint a reset link for any account.
-2. **Revoke the Gmail app password** at Google. Removed from history; that does not un-leak it.
+All three items are closed. They are kept rather than deleted because each one was the reason
+something else was deferred, and because two of them turned out to be smaller than this file
+claimed — which is worth remembering the next time it claims something.
+
+1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY` — done, and this entry says less than it
+   used to on purpose.** It claimed both old values were in git history. Only one was. The AES
+   literal is in three blobs (`fdbaece`, `87e2869`, `a88e320`; `4363391` removed it), and it stays
+   there deliberately — it is dead, nothing ever deployed with it, and a rewrite was judged not
+   worth breaking every SHA for. The JWT secret was **never** a value here: all five historical
+   `JwtService.java` blobs hold `SECRET_KEY = "${JWT_SECRET}"`, an unresolved placeholder, and a
+   scan of all 663 blobs in the object database finds no 64-hex string at all. Both values now in
+   `.env` appear in zero commits. Generate a pair with `scripts/init-env.sh`.
+2. **Revoke the Gmail app password — done, August 2026.** The account was
+   `coderunners24@gmail.com`. Removing it from history never un-issued it, and the exposure was
+   narrow but not zero: this repository and its predecessor are both private with 0 forks, yet
+   every clone and CI cache taken while it was pushed still holds it. Those copies now authenticate
+   nothing. A Gmail app password grants IMAP as well as SMTP, so what this closed was read access to
+   that mailbox, not only the ability to send as it.
 3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
    August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
-   it was the item everything else deferred to; 1 and 2 are what gate public release now.
+   it was the item everything else deferred to.
 
 `~/oss-release/` holds the pre-rewrite backups and the model weights. **`best.pt` is not
 reproducible** — the training dataset is not in the repository. Do not delete that directory.

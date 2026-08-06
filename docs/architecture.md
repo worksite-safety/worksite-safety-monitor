@@ -159,11 +159,21 @@ once with its partition and offset, and skipped. No retries.
 ### The unit flag
 
 `event.periodic.input-unit` declares what the *producer* sends — `SECONDS` for the implementation
-that was in the field before this release, `MILLIS` for the rewritten detector — and ingest normalises
-to milliseconds. It exists because the two repositories deploy independently: a millisecond producer
-read as seconds stores 33 ms flickers as violations, and a seconds producer read as milliseconds
-stores nothing at all. Both are silent. It ships as `SECONDS` and **must be flipped to `MILLIS` when
-the rewritten detector is deployed.**
+that was in the field before the rewrite, `MILLIS` for the detector in this repository — and ingest
+normalises to milliseconds. It exists because the two halves deploy independently: a millisecond
+producer read as seconds stores 33 ms flickers as violations, and a seconds producer read as
+milliseconds stores nothing at all. Both are silent, and they fail in opposite directions, which is
+why the flag is explicit rather than inferred.
+
+**It ships as `MILLIS`**, in `engine/src/main/resources/application.yml` and in `docker-compose.yml`,
+matching the detector here. Nothing needs flipping for a fresh install.
+
+The one place `SECONDS` survives is the annotation default,
+`@Value("${event.periodic.input-unit:SECONDS}")` in `RawEventService`. That applies only when the
+property is absent from configuration altogether — an old deployment picking up this code without
+having been told which producer it has. Defaulting to the *pre-migration* reading is deliberate:
+guessing `MILLIS` there would silently reinterpret data the deployment did not write. See
+[development.md](development.md#the-one-shot-data-migration) for the migration order.
 
 ---
 

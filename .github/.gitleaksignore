@@ -1,0 +1,36 @@
+# Known findings, ignored by exact fingerprint. Read with .github/gitleaks.toml,
+# which explains why the exceptions are split between that file's path
+# allowlists and this one: gitleaks 8.28.0 silently ignores `targetRules`, so an
+# allowlist cannot be scoped to a single rule. Anything that has to stay live
+# for one rule while being suppressed for another has to come here instead.
+#
+# ci.yml passes this file explicitly with --gitleaks-ignore-path, because it
+# does not live at the repository root where gitleaks looks by default.
+#
+# Format: <commit>:<path>:<rule-id>:<line>. A fingerprint pins one finding in
+# one commit. If history is ever rewritten these stop matching and the job goes
+# red - which is the correct failure, because it means the scan no longer knows
+# which findings were the reviewed ones.
+
+# --- The retired password-reset AES key, in the two commits that added it. ----
+#
+# The literal is dead: it decrypts nothing deployed, and 4363391 removed it from
+# both files. These two entries are what let the rule that names it exist at all
+# without the job being red from its first run. 87e2869 also carries the literal
+# but only reformatted the line around it, and 4363391 only deletes it; gitleaks
+# reports additions, so neither produces a finding and neither needs an entry.
+#
+# fdbaece introduced it in the production class.
+fdbaeceec30f23e5c84ccf0d77db7316b717481f:engine/src/main/java/com/graduation/project/engine/core/PasswordService.java:worksite-dead-password-reset-aes-key:16
+# a88e320 quoted it in a test javadoc, documenting the ciphertext contract.
+a88e3209f11ad7cab5164414d2b45ffe54236215:engine/src/test/java/com/graduation/project/engine/core/PasswordServiceTest.java:worksite-dead-password-reset-aes-key:28
+
+# --- PasswordServiceTest.java's own fake keys. -------------------------------
+#
+# By fingerprint rather than by adding the file to gitleaks.toml's path
+# allowlist, deliberately. This is the file where the real key came back once
+# already, so it is the last file that should be exempt from the rule that
+# watches for it. Ignoring these two findings individually keeps every other
+# rule - and the AES rule - live in it.
+43633917aaf89abf17e777702d4161cb3ee4c3a0:engine/src/test/java/com/graduation/project/engine/core/PasswordServiceTest.java:generic-api-key:48
+43633917aaf89abf17e777702d4161cb3ee4c3a0:engine/src/test/java/com/graduation/project/engine/core/PasswordServiceTest.java:generic-api-key:49

@@ -369,7 +369,7 @@ pyrightconfig.json
 # model under a recognised filename and run it in place of the one this project
 # trained.
 # Neither belongs in git - they are what made this repository 250 MB before the
-# v1.0.0 history rewrite.
+# history rewrite.
 *.pt
 
 # Training runs and the detector's per-frame output image are runtime artifacts.
@@ -391,3 +391,14 @@ detector/aug_data/
 # repository whose history was rewritten to get binaries out of it. That history
 # reached 250 MB one reasonable-looking file at a time.
 demo/*.mp4
+
+# Claude Code's agent worktrees and local session state. Measured at 1.4 GB in
+# this checkout, untracked and - until this line existed - not ignored either,
+# which put the whole thing one `git add -A` away from being committed. That is
+# the same accident, in the same shape, as the one the history rewrite above was
+# needed to undo, so it gets a rule rather than a habit.
+#
+# Note this is the WHOLE directory. .claude/settings.json is a file some projects
+# do commit; this one does not, because nothing here depends on it and a
+# narrower rule would have to be right about every future file the tool adds.
+.claude/

@@ -19,6 +19,7 @@ import {
     ChartsContainer
 
 } from "./pages"
+import {SiteFooter} from "./components";
 import {useSelector} from "react-redux";
 
 // react-toastify 11 binds Alt+T on `document` to focus the toast region. v9 had
@@ -62,6 +63,10 @@ function App() {
                 <Route path='change-password' element={<ChangePassword/>}/>
                 <Route path='*' element={<Error/>}/>
             </Routes>
+            {/* Outside <Routes> so the AGPL section 13 source offer is on every
+                screen, authenticated or not, without each page remembering to
+                render it. */}
+            <SiteFooter/>
             {/* draggable: v11 changed the default from true to 'touch', which
                 dropped mouse-drag dismissal. true restores the v9 gesture for
                 both pointer types. aria-label: v11's default is the literal

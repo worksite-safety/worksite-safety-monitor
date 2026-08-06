@@ -2,6 +2,7 @@
   "name": "worksite-safety-monitor-web",
   "version": "1.0.0",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "dependencies": {
     "@reduxjs/toolkit": "^2.12.0",

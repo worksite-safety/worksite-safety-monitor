@@ -3,11 +3,30 @@
 # fields filled in with "n/a", which is worse than a paragraph of prose.
 blank_issues_enabled: true
 
+# The security link points at SECURITY.md, NOT at /security/advisories/new,
+# and that is deliberate.
+#
+# GitHub's "report a vulnerability" form only exists once PRIVATE VULNERABILITY
+# REPORTING is enabled, and that setting cannot be enabled on a private
+# repository at all - the API answers 404, and the 404 is the visibility gate,
+# not a permissions problem. This repository is private until the release
+# clears, so /security/advisories/new is a dead link for everyone who can see
+# this file today. It used to be the target here, and it 404'd for anyone who
+# clicked it.
+#
+# SECURITY.md resolves in both states, and it is where the routing actually
+# lives: it names the advisory form for when it exists AND gives a fallback
+# that works right now (contact a maintainer directly using the address on
+# their recent commits). Pointing here means nothing has to be remembered and
+# re-pointed on the day the repository goes public - the advisory form simply
+# starts working, and SECURITY.md already says so. If you later want the
+# one-click form back as a second entry, add it THEN, when it resolves.
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/worksite-safety/worksite-safety-monitor/security/advisories/new
+    url: https://github.com/worksite-safety/worksite-safety-monitor/blob/main/SECURITY.md
     about: >
-      Do NOT open a public issue. Report privately - see SECURITY.md. This
+      Do NOT open a public issue. SECURITY.md explains how to report privately,
+      including what to do while GitHub's advisory form is unavailable. This
       applies especially to anything touching the JWT signing key, the
       password-reset AES key, or the reset-token flow, which has no expiry and
       no revocation.

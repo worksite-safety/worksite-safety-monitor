@@ -1,13 +1,35 @@
 # Continuous integration for the three modules of the worksite safety monitor.
 #
 # The jobs are shaped around one property worth protecting: THE REQUIRED CHECK
-# MUST BE FAST. `detector-unit` is the gate, it runs 418 tests, and it installs
-# no computer-vision stack at all - no torch, no opencv, no ultralytics. That is
-# not an accident of packaging, it is a design the detector's own
-# tests/test_architecture.py enforces: the rule modules may not import a heavy
-# dependency, so they can be tested on any machine in about two seconds. A CI
-# job that pulled 2 GB of torch to run them would throw that away, and the
-# review loop would get slower every week until nobody waited for it.
+# MUST BE FAST. `detector-unit` is the gate and it installs no computer-vision
+# stack at all - no torch, no opencv, no ultralytics. That is not an accident of
+# packaging, it is a design the detector's own tests/test_architecture.py
+# enforces: the rule modules may not import a heavy dependency, so they can be
+# tested on any machine in about half a second. A CI job that pulled 2 GB of
+# torch to run them would throw that away, and the review loop would get slower
+# every week until nobody waited for it.
+#
+# THE COUNT, because this file used to give two different ones. In this job's
+# environment - `pip install -e .[dev]`, nothing else - pytest reports:
+#
+#     414 passed, 3 skipped, 2 deselected in 0.46s
+#
+# Three numbers, all real, measuring different things, and quoting whichever one
+# you remember is how the file ended up contradicting itself:
+#
+#   418  collected. Everything importable without the CV stack. The
+#        `-m "not requires_ultralytics"` filter removes NOTHING here - the
+#        marked tests live in tests/integration/, whose conftest.py skips at
+#        COLLECTION time when opencv is absent, so they are never collected to
+#        be deselected. Locally, in a virtualenv with the [cv] extra, this same
+#        marker filter is what does the work.
+#   416  selected, after the two --deselect flags on the pytest step below.
+#        This is the number of tests this job actually runs.
+#   414  passed. The other two of the 416 skip themselves:
+#        tests/test_geometry.py calls importorskip("numpy"). (The third skip in
+#        pytest's summary line is tests/integration/ as a whole, at collection.)
+#
+# So: 418 exist, 416 run, 414 pass. If you change any of them, change all three.
 #
 # Which job runs when:
 #
@@ -248,7 +270,7 @@ jobs:
       # If you are adding a test and find yourself wanting a third deselect,
       # that test almost certainly needs the `requires_ultralytics` marker
       # instead, which is the mechanism built for this.
-      - name: Run the fast tier (414 tests, no CV stack, ~0.5 s)
+      - name: Run the fast tier (416 run, 414 pass, no CV stack, ~0.5 s)
         working-directory: detector
         run: |
           pytest -m "not requires_ultralytics" -rs \
@@ -345,6 +367,32 @@ jobs:
   # NOT on pull requests. `if:` rather than a separate `on:` block so that the
   # job still appears in the run's job list with a "skipped" status, which tells
   # a reviewer it exists; a second workflow file would just be invisible.
+  #
+  # WHAT THAT COSTS, said out loud rather than left to be discovered:
+  #
+  # NO PULL REQUEST EVER GETS CV-STACK COVERAGE. Every PR that breaks the
+  # adapters - a tensor shape, an ultralytics API move, a weight-loading path -
+  # is green on all four PR jobs and merges. The break surfaces on the push run
+  # against main, after it has landed, and the person who has to read it is
+  # whoever pushes next rather than whoever wrote it. That is the accepted
+  # trade for a fast review loop; it is not a gap nobody noticed.
+  #
+  # AND THIS JOB CAN NEVER BE A REQUIRED STATUS CHECK while that `if:` stands.
+  # GitHub counts a skipped check as satisfied, so requiring it would make it
+  # green by construction on every PR, having never run - a gate that proves
+  # nothing, which is worse than no gate because it looks like one. Leave it out
+  # of branch protection. (The repository has form here: a targeted `-Dtest=`
+  # run reporting BUILD SUCCESS on tests it never executed is the same shape of
+  # defect, and is documented in CLAUDE.md for the same reason.)
+  #
+  # There IS a way to get this coverage before merging, and it needs no change
+  # to any trigger: `on: workflow_dispatch` is declared above, and on a manual
+  # run github.event_name is 'workflow_dispatch', not 'pull_request', so this
+  # job runs. Dispatch the workflow against the PR's branch when a change goes
+  # anywhere near detector/src/worksite_detector/adapters.py, annotate.py or
+  # publisher.py - the three modules allowed to import the CV stack at all, and
+  # therefore the only ones whose breakage this tier can see and the fast tier
+  # cannot.
   # ---------------------------------------------------------------------------
   detector-integration:
     name: detector (integration, CV stack)
@@ -476,8 +524,8 @@ jobs:
   #
   # ================== READ THIS BEFORE TRUSTING A GREEN TICK ==================
   #
-  # THIS JOB WOULD NOT HAVE CAUGHT ANY OF THE FOUR CREDENTIALS THAT WERE
-  # ACTUALLY COMMITTED TO THIS REPOSITORY.
+  # THE DEFAULT RULESET WOULD NOT HAVE CAUGHT ANY OF THE FOUR CREDENTIALS THAT
+  # WERE ACTUALLY COMMITTED TO THIS REPOSITORY.
   #
   # That is not a guess and it is not pessimism. It was checked against
   # gitleaks' own rule source - cmd/generate/config/rules/generic.go, the
@@ -502,6 +550,19 @@ jobs:
   # repository is clean, and it never did. The four real ones were found by a
   # person reading application.yml and PasswordService.java, which remains the
   # only method with a record of working here.
+  #
+  # ONE OF THE FOUR IS COVERED NOW, and only one. .github/gitleaks.toml carries
+  # an explicit rule for the retired password-reset AES key - the literal is
+  # dead and already public in this repository's history, so naming it costs
+  # nothing and buys a regression guard against the obvious "fix" of restoring
+  # the key that outstanding reset links were minted with. The Gmail app
+  # password, the JWT signing key and the SMTP username are still missed, and
+  # nothing here will catch a credential nobody has thought of.
+  #
+  # Do NOT read that rule as making this job a detector. It answers one
+  # question about one known string. It is a regression test wearing a
+  # scanner's clothes, and the entropy analysis in gitleaks.toml explains why
+  # no general rule can do the job instead.
   #
   # Keep the job anyway - it costs seconds and it catches the categories with
   # unambiguous shapes: AWS keys, GitHub and Slack tokens, private key PEM
@@ -550,18 +611,49 @@ jobs:
           ./gitleaks version
 
       # --config is not optional: with the DEFAULT ruleset this scan reports
-      # EIGHT findings against this repository, and all eight are deliberately
-      # fake credentials in engine's test fixtures - the ones
-      # ProductionConfigurationTest needs in order to assert that production has
-      # no such defaults. A job that is red on the day it is added, for reasons
-      # nobody can fix, teaches everyone within a week that its red X means
-      # nothing. .github/gitleaks.toml suppresses exactly those paths and
-      # documents the cost of doing so.
+      # NINE findings against this repository, and all nine are deliberately
+      # fake credentials in test fixtures - the ones ProductionConfigurationTest
+      # needs in order to assert that production has no such defaults, plus a
+      # JWT-shaped string in web's axios test. A job that is red on the day it
+      # is added, for reasons nobody can fix, teaches everyone within a week
+      # that its red X means nothing. .github/gitleaks.toml suppresses exactly
+      # those and documents the cost of doing so. (It said EIGHT for a while.
+      # The ninth arrived with the Vite migration and nothing re-counted.)
       #
       # `git` rather than `dir`: the scanner walks commits, because a credential
       # deleted in the next commit is still a leaked credential. It also means
       # only COMMITTED content is scanned - an uncommitted local .env is not
       # this job's business, and the .gitignore is.
+      #
+      # --log-opts, and it is load bearing. Without it `gitleaks git` runs
+      # `git log -p --full-history --all`, and GIT PRINTS NO PATCH FOR A MERGE
+      # COMMIT - so anything introduced by a merge is invisible to this job.
+      # That is not theoretical: a conflict resolution, or an "evil merge" that
+      # edits files while merging, lands content that no ordinary commit ever
+      # carried. Measured on a purpose-built repository - two secrets of
+      # identical shape, one committed normally and one added only while
+      # merging - `gitleaks dir` found both and `gitleaks git` found one. Merges
+      # are a large fraction of this history and the default walk skips every one
+      # of them; at the commit where this was measured that was 28 of 110, with
+      # the default walk reaching 83. Those counts move with every merge, so
+      # treat them as the measurement that motivated the flag, not as a current
+      # figure.
+      #
+      # --diff-merges=remerge is what fixes it: it shows only what the merge
+      # ITSELF introduced, over and above merging the parents. That reaches the
+      # merge commits the default walk skips, for 804 extra bytes and about two
+      # seconds. `-m` and
+      # --diff-merges=first-parent also work and were measured too, but both
+      # re-scan the whole of every merged branch (+490 KB) and report each
+      # finding twice. Everything else in the string is what gitleaks passes by
+      # default and must be repeated, because --log-opts REPLACES the default
+      # rather than adding to it - drop `--all` here and the scan quietly
+      # narrows to one branch.
+      #
+      # --gitleaks-ignore-path, because .gitleaksignore lives in .github/ with
+      # the rest of this configuration rather than at the repository root where
+      # gitleaks looks by default. It holds four known findings, by exact
+      # fingerprint, each with its reason written beside it.
       #
       # --redact, so a finding does not print the secret into a public build log
       # and leak it a second time in the course of reporting it.
@@ -569,6 +661,8 @@ jobs:
         run: |
           ./gitleaks git . \
             --config .github/gitleaks.toml \
+            --gitleaks-ignore-path .github/.gitleaksignore \
+            --log-opts="-p --full-history --all --diff-merges=remerge" \
             --redact --no-banner \
             --report-format sarif --report-path gitleaks.sarif
 
