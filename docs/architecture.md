@@ -5,7 +5,7 @@ Three modules, three runtimes, two contracts. Everything else is internal to one
 ```
   ┌──────────────────────────────┐   Kafka   ┌────────────────────────────┐   REST   ┌───────────┐
   │ detector                     │  topic    │ engine                     │  + JWT   │ web       │
-  │ Python 3.11+, YOLOv8         │ rawEvents │ Java 17, Spring Boot 3.0.4 │          │ React     │
+  │ Python 3.11+, YOLOv8         │ rawEvents │ Java 17, Spring Boot 3.5.16│          │ React     │
   │                              │ ────────► │                            │ ───────► │           │
   │ camera / file → rules        │  JSON     │ listener → MongoDB "event" │  JSON    │ charts    │
   │            └→ output_image.jpg│           │        → aggregation       │          │ grid, PDF │
