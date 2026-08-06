@@ -25,7 +25,12 @@
 # cannot know - that in a container these paths are bind mounts, and which host
 # directory each one came from.
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS runtime
+# Trixie (Debian 13), not bookworm. A scan of the bookworm-based image reported 8
+# CRITICAL CVEs with no fix available - "no fix available" because Debian 12 never
+# shipped patched versions of the affected packages, so there was nothing to
+# upgrade to and no amount of apt-get would have cleared them. Trixie has them.
+# Python is 3.12.13 on both bases, so no interpreter change is hiding in this line.
+FROM python:3.12-slim-trixie AS runtime
 
 # OpenCV's shared-library dependencies. pyproject pins `opencv-python`, not
 # `-headless`, so the GUI-linked wheel is what gets installed and it needs
@@ -34,11 +39,41 @@ FROM python:3.12-slim-bookworm AS runtime
 # Without these, `import cv2` dies with "libGL.so.1: cannot open shared object
 # file", six layers into an import chain, which reads as a broken install
 # rather than a missing OS package.
+#
+# `libglib2.0-0` is a VIRTUAL package on trixie, not a real one - Debian's 64-bit
+# time_t transition renamed the real package to libglib2.0-0t64, which Provides the
+# old name, and apt resolves it because that is the only provider. So the line below
+# survived the move to Debian 13 unchanged, and installs libglib2.0-0t64. Left as
+# the plain name deliberately: libglib2.0-0t64 does not exist in bookworm at all, so
+# spelling it out would pin this file to Debian 13 and later for no gain. If you run
+# `apt-cache policy libglib2.0-0` and see "Candidate: (none)", that is the virtual
+# package showing through - not a broken line. `libgl1` is real on both.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
  && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
+
+# Build tooling, pinned, and installed BEFORE anything else. The position is the
+# whole point: the CPU-wheel layer below uses `--index-url`, which REPLACES PyPI
+# rather than adding to it, and download.pytorch.org hosts exactly three setuptools
+# (70.0.0, 70.2.0, 78.1.0) and no wheel at all. Leave this until later and torch's
+# own `setuptools>=77.0.3` gets satisfied from that mirror by 78.1.0 - the version
+# these pins exist to get past - and the image ships it. Doing it here means the
+# requirement is already met and pip never asks the mirror.
+#
+# The base image carries pip and nothing else; setuptools and wheel otherwise arrive
+# as somebody else's transitive dependency, at whatever version that somebody
+# happened to need. That is what is being removed here, more than any one CVE.
+#
+# Pinned exactly rather than `>=`: a floor would today resolve to pip 26.x and
+# setuptools 83.x, which is a resolver change nobody asked for, and would make two
+# builds of the same commit contain different software. Note also that setuptools
+# vendors its own copy of wheel under setuptools/_vendor/ - this line does not touch
+# that copy, only a newer setuptools moves it, so a scanner reporting a wheel version
+# other than the one below has found the vendored one.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade 'pip==25.3' 'setuptools==78.1.1' 'wheel==0.46.2'
 
 # THE size decision. `pip install ultralytics` on linux/amd64 resolves torch
 # from PyPI, and that wheel bundles the CUDA runtime, cuDNN and cuBLAS: roughly
@@ -59,8 +94,19 @@ WORKDIR /opt/detector
 COPY pyproject.toml ./
 COPY src/ src/
 
+# pillow is named here and nowhere else on purpose. It is purely transitive -
+# torchvision, matplotlib and ultralytics all pull it in, and nothing in this package
+# imports PIL - so it arrives from the CPU-wheel index above at 12.2.0 and stays
+# there: every downstream bound (pillow>=7.1.2, >=9, !=8.3.*,>=5.3.0) is satisfied by
+# 12.2.0, so no install below would ever move it on its own.
+#
+# Constrained in this layer rather than added to the `cv` extra in pyproject.toml:
+# putting it there would assert a direct dependency this codebase does not have, and
+# would push a container's security pin onto every developer who runs
+# `pip install -e .[cv]` on their laptop. The pin belongs to the image, so it lives
+# in the image.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-cache-dir '.[cv]'
+    pip install --no-cache-dir '.[cv]' 'pillow==12.3.0'
 
 # Ultralytics writes a settings YAML and scratch files on first use, and
 # defaults to ~/.config/Ultralytics - which is not writable by the non-root user
