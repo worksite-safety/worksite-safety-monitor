@@ -19,10 +19,8 @@ import com.graduation.project.engine.user.repository.TokenRepository;
 import com.graduation.project.engine.user.service.UserService;
 import com.google.gson.Gson;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import java.security.Key;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -30,6 +28,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -280,7 +279,7 @@ class SecurityMatrixTest {
   void wrongSignature_isRejectedNotFatal() throws Exception {
     // Correct three-part shape, unexpired, parses cleanly - and signed by someone else. This is
     // the forged-token case, and it must be indistinguishable from "no token" to the caller.
-    Key foreignKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
+    SecretKey foreignKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
         "d3Jvbmctc2lnbmF0dXJlLWtleS11c2VkLW9ubHktYnktdGhlLXNlY3VyaXR5LXRlc3RzLTAxMjM0NTY3ODk="));
     String forged = signedToken(foreignKey, Instant.now(), Instant.now().plus(1, ChronoUnit.HOURS));
 
@@ -372,17 +371,17 @@ class SecurityMatrixTest {
   // -------------------------------------------------------------------------------------------
 
   /** The key the application itself is configured with, read from src/test/resources. */
-  private Key appKey() {
+  private SecretKey appKey() {
     return Keys.hmacShaKeyFor(Decoders.BASE64.decode(configuredSecret));
   }
 
-  private static String signedToken(Key key, Instant issuedAt, Instant expiresAt) {
+  private static String signedToken(SecretKey key, Instant issuedAt, Instant expiresAt) {
     return Jwts.builder()
-        .setSubject("aziz@example.com")
+        .subject("aziz@example.com")
         .claim("authorities", List.of(Map.of("authority", "ADMIN")))
-        .setIssuedAt(Date.from(issuedAt))
-        .setExpiration(Date.from(expiresAt))
-        .signWith(key, SignatureAlgorithm.HS256)
+        .issuedAt(Date.from(issuedAt))
+        .expiration(Date.from(expiresAt))
+        .signWith(key, Jwts.SIG.HS256)
         .compact();
   }
 
