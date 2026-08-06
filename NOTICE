@@ -92,10 +92,24 @@ What was taken:
     per gesture -- was adopted together with that annotator.
 
 Both entered this project as detector/aiModule.py (the annotator at lines
-91-143, the gesture table as `sport_list` at the top of the file). aiModule.py
-is still in the tree, unmodified, as the artifact the current detector was
-rewritten from; it is not executed by anything and is not importable on current
-Ultralytics releases.
+91-143, the gesture table as `sport_list` at the top of the file). That file was
+the pre-rewrite program. It is no longer at the tip of the tree: nothing
+executed it and it stopped being importable at all on Ultralytics 8.1, so it was
+removed before publication rather than left for a newcomer to mistake for live
+code.
+
+It is retained, unmodified, in this repository's permanent history, and the line
+numbers quoted above and throughout detector/ address that file. Any of these
+retrieves it in full from any clone:
+
+    git show 621cfb0:detector/aiModule.py
+    git cat-file -p 127729e3
+    git log --all --full-history --follow -- detector/aiModule.py
+
+621cfb0 is the last commit that carries the file, and
+127729e368402110a4d10bc27c6f96ac4e127f43 is its blob, which resolves however the
+surrounding commits are later addressed. It entered the repository as
+AIModule/detect/aiModule.py and was renamed, byte-identical, to the path above.
 
 Where the work survives today:
 

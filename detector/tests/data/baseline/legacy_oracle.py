@@ -22,7 +22,10 @@ original had torch tensors) is flagged with a `# DEVIATION:` comment stating why
 it cannot change behaviour. Every defect that survives on purpose is flagged
 with `# NOTE:`.
 
-Line references in comments are line numbers in the original `aiModule.py`.
+Line references in comments are line numbers in the original `aiModule.py`. That
+file is not in the tree -- it was removed once the rewrite it is cited against
+was finished -- but the line numbers still address it exactly:
+`git show 621cfb0:detector/aiModule.py`. See docs/development.md for the rest.
 """
 # ruff: noqa
 # ^ Deliberate. Every lint this file trips is load-bearing transcription fidelity:

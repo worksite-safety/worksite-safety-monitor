@@ -68,9 +68,9 @@ exits successfully. Verify with a full run.
 **Python** — `ruff` and `mypy` are configured in `detector/pyproject.toml` and ship in the `[dev]`
 extra. `ruff check src tools` is clean, is what CI runs, and must stay clean. `ruff check tests`
 reports 11 findings today — ten import-ordering and one collapsible-if — and runs as a non-blocking
-CI step; fixing them is welcome, adding more is not. `detector/aiModule.py` is the original
-implementation, kept verbatim as the artifact the rewrite is measured against — it is not linted, not
-maintained, and not to be edited.
+CI step; fixing them is welcome, adding more is not. Both commands are scoped rather than a bare
+`ruff check .`, and the only thing that leaves out is `detector/training/` — one Jupyter notebook,
+kept as training provenance rather than as code.
 
 **Java** — 2-space indent, Lombok (`@Data`, `@Builder`, `@RequiredArgsConstructor` constructor
 injection), feature-first packages (`user/`, `event/`, `rawEvent/`, `email/`) each with
@@ -87,6 +87,12 @@ into the shipped bundle, so it may never be a secret.
 This codebase explains *why*, at length, and expects the same of new work. A comment that restates
 the code is noise; a comment naming the defect a line prevents is the reason the line survives a
 future refactor. The module docstrings in `detector/src/worksite_detector/` are the house style.
+
+Many of those comments cite `aiModule.py` by line number. It is the pre-rewrite detector, it is not
+in the tree, and grepping for it will not find it —
+[docs/development.md](docs/development.md#aimodulepy-and-the-line-numbers-that-cite-it) says how to
+read it out of git history. Cite it the same way if you add to that record: the line numbers address
+a blob that cannot change.
 
 Commit messages follow the same idea: a `type(scope): imperative summary` first line — `feat`,
 `fix`, `test`, `docs`, `refactor`, `chore`, `build`, with `detector`, `engine` or `web` as the scope

@@ -17,10 +17,12 @@ changes.
 
 The starting point was a university graduation project: a working demo of three modules that talked
 to each other, and a 546-line `aiModule.py` that could not be imported without a live Kafka broker,
-let alone tested. Everything below is the distance between that and something publishable. The
-original file is still in the tree at `detector/aiModule.py`, untouched, because it is what the
-rewrite is measured against — it is not executed by anything and does not import on ultralytics 8.1
-or later.
+let alone tested. Everything below is the distance between that and something publishable. That file
+is not in the tree: it was kept at the tip through the rewrite as the artifact being measured
+against, then removed before publication, because nothing executed it and it does not import on
+ultralytics 8.1 or later. It stays in history untouched, and the line numbers that cite it
+throughout `detector/` still resolve — `git show 621cfb0:detector/aiModule.py`, or see
+[docs/development.md](docs/development.md#aimodulepy-and-the-line-numbers-that-cite-it).
 
 ### Added
 

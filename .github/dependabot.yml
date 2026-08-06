@@ -101,10 +101,12 @@ updates:
       # `ultralytics>=8.3,<8.4` is pinned to a minor series on purpose, and the
       # upper bound is load bearing. annotate.py imports
       # ultralytics.utils.plotting.Annotator for its COCO skeleton table, and
-      # that module has already moved once in this project's lifetime -
-      # aiModule.py imports it from ultralytics.yolo.utils.plotting, a path
-      # deleted in 8.1, which is why the original file cannot be executed at all
-      # today. The integration tier is what would catch the next move, and it
+      # that module has already moved once in this project's lifetime - the
+      # pre-rewrite aiModule.py imported it from ultralytics.yolo.utils.plotting,
+      # a path deleted in 8.1, which is part of why that file was removed from
+      # the tree: it could no longer be executed at all. It is still readable in
+      # git history if the precedent needs checking; see docs/development.md.
+      # The integration tier is what would catch the next move, and it
       # runs nightly rather than on every PR, so an automated minor bump could
       # merge on a green PR and break the detector until the next night.
       - dependency-name: ultralytics

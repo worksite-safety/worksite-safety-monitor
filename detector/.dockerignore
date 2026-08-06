@@ -8,7 +8,6 @@ models/
 tests/
 tools/
 training/
-aiModule.py
 
 # Local environments and caches. .venv especially: it holds a host platform's
 # native wheels, which would be both large and wrong inside a linux image.
