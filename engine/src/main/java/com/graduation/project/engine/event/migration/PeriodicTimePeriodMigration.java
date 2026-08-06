@@ -32,7 +32,7 @@ import org.springframework.stereotype.Component;
  *
  * <h2>Why an aggregation pipeline and not $mul</h2>
  *
- * <p>{@code Event.timePeriod} is a {@link BigDecimal} and Spring Data MongoDB 4.0.3 persists
+ * <p>{@code Event.timePeriod} is a {@link BigDecimal} and Spring Data MongoDB 4.5.13 persists
  * BigDecimal as a BSON <em>String</em>, not Decimal128 - pinned by
  * {@code EventRepositoryIT#timePeriodIsStoredAsBsonString}. {@code $mul} cannot multiply a string,
  * so the value has to be parsed, scaled and re-serialised server-side:
@@ -45,9 +45,17 @@ import org.springframework.stereotype.Component;
  *
  * <p>The output stays a BSON String. Writing Decimal128 today would be read incorrectly by the
  * current mapper: the {@code MongoCustomConversions.BigDecimalRepresentation} opt-in that makes
- * Decimal128 the safe choice only arrives in Spring Data MongoDB 4.2, inside the Boot 3.5.x
- * upgrade range. Migrating the unit and the BSON type in one step would couple this change to
+ * Decimal128 the safe choice arrives in Spring Data MongoDB 4.5, and on the 4.5.13 that Boot
+ * 3.5.16 resolves its default is still {@code STRING} - so the Boot 3.5.x upgrade left this
+ * reasoning intact. Migrating the unit and the BSON type in one step would couple this change to
  * that upgrade for no benefit.
+ *
+ * <p>The concern becomes live on Spring Data MongoDB 5.0 (Boot 4.0), where {@code STRING} is
+ * deprecated and the default instead hands BigDecimal to the driver, which stores Decimal128.
+ * Whoever takes that upgrade has to register a {@code MongoCustomConversions} pinning
+ * {@code BigDecimalRepresentation.STRING}, or migrate the field deliberately; doing neither leaves
+ * new writes landing as Decimal128 beside String documents, which is the one state this migration
+ * exists to avoid.
  *
  * <h2>Safety</h2>
  *
