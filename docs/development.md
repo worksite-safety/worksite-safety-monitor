@@ -143,6 +143,36 @@ real worksite clip — model outputs, never pixels, so it replays without weight
 transcription of the original. Both are frozen at the moment they were taken; where a later
 measurement disagreed with them, the correction lives in a test rather than an edit.
 
+### `aiModule.py`, and the line numbers that cite it
+
+Roughly a hundred comments and docstrings under `detector/` cite `aiModule.py` by line number —
+`pipeline.py` says it replaces lines 280-535, `test_ppe_rules.py` pins a defect at line 428,
+`legacy_oracle.py` transcribes lines 312-512 with the original's line numbers in its margins. **That
+file is not in the tree, and grepping for it will not find it.** This section is the one place that
+says where it went; the citations themselves are left alone deliberately, and the rest of this
+section is why.
+
+It was the graduation project's detector: one 546-line module that opened a `KafkaProducer` at
+import time, so it could not be imported — let alone tested — without a live broker. It was kept at
+the tip through the rewrite as the artifact being measured against, then removed before publication.
+Nothing imported it, nothing executed it, the Docker image excluded it, and it had stopped being
+importable at all on Ultralytics 8.1, which deleted the `ultralytics.yolo.utils.plotting` path its
+imports name. What was left was 546 lines of dead code with no header saying so.
+
+Removing it from the tip removes nothing from the repository. Read it with any of:
+
+```bash
+git show 621cfb0:detector/aiModule.py          # last commit that carries it
+git cat-file -p 127729e3                       # its blob, addressed directly
+git log --all --full-history --follow -- detector/aiModule.py
+```
+
+Every line number cited anywhere in this repository addresses that blob, which is why those
+citations were not rewritten. They are the record of what the rewrite changed and why, they are
+still exact, and "formerly at `detector/aiModule.py` line 428" would be a hundred edits that made
+each of them longer and none of them truer. `NOTICE` carries the same pointer, because the file is
+also where two co-authors' contributions entered the project and attribution has to stay followable.
+
 ### Lint and types
 
 ```bash
@@ -151,9 +181,9 @@ ruff check tests                        # 11 findings today; non-blocking in CI
 mypy src
 ```
 
-`detector/aiModule.py` is the original
-implementation, kept verbatim as the artifact the rewrite is measured against; it is not linted and
-not maintained. Note that running `mypy` inside a venv that also has the `[cv]` extra can fail
+Both commands are scoped rather than a bare `ruff check .`, and what that leaves out is
+`detector/training/` — one Jupyter notebook, kept as training provenance rather than as code.
+Note that running `mypy` inside a venv that also has the `[cv]` extra can fail
 inside numpy's own stubs, because `[tool.mypy]` pins `python_version = "3.11"` while numpy's stubs
 use syntax added in 3.12.
 

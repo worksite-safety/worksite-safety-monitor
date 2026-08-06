@@ -217,15 +217,14 @@ jobs:
 
       # SCOPED, and here is exactly what is left out and why:
       #
-      #   detector/aiModule.py     the original pre-rewrite program, kept as the
-      #                            historical record the rewrite is documented
-      #                            against. 32 findings, every one of them a
-      #                            faithful record of how that file was. Linting
-      #                            a museum piece into shape would destroy the
-      #                            thing it is kept for.
       #   detector/training/       one Jupyter notebook (15 findings). Notebooks
       #                            are excluded from review noise by
       #                            .gitattributes already.
+      #
+      # That list had a second entry, detector/aiModule.py, until the file was
+      # removed from the tree. The scoping is still doing work - the notebook is
+      # still here - but it is now one file away from being deletable in favour
+      # of a plain `ruff check .`, once tests/ below comes clean.
       #
       # `tests/` is checked separately below and is NOT yet clean - see there.
       - name: Lint (ruff)
@@ -250,8 +249,9 @@ jobs:
       # Both deselected tests are HARNESS GUARDS. The suite proves that the
       # composition root and the publisher can be imported with torch, cv2,
       # ultralytics and kafka blocked - that is the headline regression against
-      # aiModule.py, which built a KafkaProducer at module scope and so could not
-      # be imported at all without a broker. A block only proves something if the
+      # aiModule.py, the pre-rewrite detector (in git history, not in the tree),
+      # which built a KafkaProducer at module scope and so could not be imported
+      # at all without a broker. A block only proves something if the
       # thing being blocked is otherwise importable, so these two assert exactly
       # that: "all four are installed here, therefore blocking them is not
       # vacuous."
