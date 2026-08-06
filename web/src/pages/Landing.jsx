@@ -2,7 +2,7 @@ import React from 'react';
 import main from '../assets/images/firstLogo.svg'
 import Wrapper from '../assets/wrappers/LandingPage'
 import {Logo} from "../components";
-import {Link} from "react-router-dom";
+import {Link} from "react-router";
 
 
 const Landing = () => {

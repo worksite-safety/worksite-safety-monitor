@@ -4,7 +4,7 @@ import Wrapper from '../assets/wrappers/RegisterPage';
 import {toast} from "react-toastify";
 import {useDispatch, useSelector} from "react-redux";
 import {forgotPassword, loginUser, registerUser} from "../features/user/userSlice";
-import {useNavigate} from "react-router-dom";
+import {useNavigate} from "react-router";
 import "react-datepicker/dist/react-datepicker.css";
 
 const initialState = {

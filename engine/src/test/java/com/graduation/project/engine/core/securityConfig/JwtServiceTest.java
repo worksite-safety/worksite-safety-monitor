@@ -9,7 +9,6 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
@@ -17,13 +16,13 @@ import io.jsonwebtoken.security.WeakKeyException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.Key;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import javax.crypto.SecretKey;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -84,9 +83,12 @@ class JwtServiceTest {
     // assertThat overload set, and Assertions.assertThat(Predicate) vs (IntPredicate) is ambiguous.
     Object extra = jwtService.extractClaim(token, claims -> claims.get("k"));
     assertThat(extra).isEqualTo("v");
-    // setClaims() REPLACES the claim map, so the subject and authorities must survive being set
-    // after it. They do, because generateToken sets them afterwards - worth pinning, since
-    // reordering those builder calls would silently produce a subject-less token.
+    // The subject and authorities must survive the caller-supplied claim map. Under jjwt 0.11's
+    // setClaims() that map REPLACED everything, so the risk was the subject being wiped; under
+    // 0.13's claims() it MERGES, so the risk is inverted - an extraClaims entry named "sub" would
+    // now overwrite the subject if it were applied last. Either way the ordering in generateToken
+    // (claim map first, subject after) is what makes this pass, and reordering those builder calls
+    // still silently produces a wrong subject. That is what this assertion pins, on both APIs.
     assertThat(jwtService.extractUsername(token)).isEqualTo("aziz@example.com");
   }
 
@@ -193,7 +195,7 @@ class JwtServiceTest {
   @Test
   @DisplayName("a token signed with another key throws SignatureException")
   void wrongSignature_throwsSignatureException() {
-    Key foreign = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
+    SecretKey foreign = Keys.hmacShaKeyFor(Decoders.BASE64.decode(
         "d3Jvbmctc2lnbmF0dXJlLWtleS11c2VkLW9ubHktYnktdGhlLXNlY3VyaXR5LXRlc3RzLTAxMjM0NTY3ODk="));
     String forged = signedWith(foreign, Instant.now(), Instant.now().plus(1, ChronoUnit.HOURS));
 
@@ -272,16 +274,16 @@ class JwtServiceTest {
   // Helpers
   // -------------------------------------------------------------------------------------------
 
-  private static Key appKey() {
+  private static SecretKey appKey() {
     return Keys.hmacShaKeyFor(Decoders.BASE64.decode(SECRET));
   }
 
-  private static String signedWith(Key key, Instant issuedAt, Instant expiresAt) {
+  private static String signedWith(SecretKey key, Instant issuedAt, Instant expiresAt) {
     return Jwts.builder()
-        .setSubject("aziz@example.com")
-        .setIssuedAt(Date.from(issuedAt))
-        .setExpiration(Date.from(expiresAt))
-        .signWith(key, SignatureAlgorithm.HS256)
+        .subject("aziz@example.com")
+        .issuedAt(Date.from(issuedAt))
+        .expiration(Date.from(expiresAt))
+        .signWith(key, Jwts.SIG.HS256)
         .compact();
   }
 }

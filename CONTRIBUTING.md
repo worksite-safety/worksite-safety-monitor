@@ -58,8 +58,10 @@ Naming matters, because both build tools select by filename:
   repository were silently skipped for the whole graduation project.
 - **web**: Vitest, `src/**/*.{test,spec}.{js,jsx}` (`vite.config.js`), run with `npm test`.
 
-One trap worth repeating from the commit log: `-Dtest=SomeTest` does **not** run `@Nested` classes,
-so a targeted run can report green on tests that never executed. Verify with a full run.
+One trap worth repeating from the commit log: a targeted `-Dtest=` run can report green on tests
+that never executed. Surefire 3.5.6 fixed the `@Nested` half of it — naming the class now runs the
+nested tests too — but naming a *method* that lives in a nested class runs nothing at all and still
+exits successfully. Verify with a full run.
 
 ## Style
 
@@ -75,8 +77,8 @@ injection), feature-first packages (`user/`, `event/`, `rawEvent/`, `email/`) ea
 `controller/`, `service/`, `model/`, `repository/`; cross-cutting configuration under `core/`.
 
 **JavaScript** — `web/` is React on Vite, with `styled-components` wrappers in
-`src/assets/wrappers/`, MUI for grids and inputs, `recharts` for charts, and Redux Toolkit for the
-`user` slice only — page-level data is `useState` plus `customFetch` in an effect. Anything the
+`src/assets/wrappers/`, TanStack Table for the reporting grid, `recharts` for charts, and Redux
+Toolkit for the `user` slice only — page-level data is `useState` plus `customFetch` in an effect. Anything the
 browser needs from the environment must be `VITE_`-prefixed, and everything so prefixed is baked
 into the shipped bundle, so it may never be a secret.
 

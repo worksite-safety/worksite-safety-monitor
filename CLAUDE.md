@@ -13,8 +13,9 @@ detector (Python/YOLOv8)  --Kafka "rawEvents"-->  engine (Spring Boot)  --REST/J
 ```
 
 It began as a three-person graduation project (Oct 2023 – Jan 2024) and was rewritten for open
-source in Aug 2026. The rewrite is done; the release is gated on licensing consent from the two
-co-authors. **The repository is private until that arrives.**
+source in Aug 2026. The rewrite is done, and all three co-authors have since given written consent
+to AGPL-3.0-or-later — `NOTICE` records that and when. **The repository is still private**, and what
+holds it there is now the credential work under "Outstanding" below, not the licensing.
 
 ## Commands
 
@@ -24,8 +25,8 @@ Each module runs on its own. There is no top-level build. `docker compose up` ru
 ```
 pip install -e .[dev]                       # no torch, fast
 pip install -e .[cv]                        # ultralytics, opencv, kafka -- ~2 GB
-pytest -m "not requires_ultralytics"        # 414, under a second, the inner loop
-pytest                                      # 481 with the CV stack installed
+pytest -m "not requires_ultralytics"        # 418 pass in ~2 s, the inner loop
+pytest                                      # 481 collected: 465 pass, 16 skip, ~4 s
 ruff check src tools
 python -m worksite_detector --dry-run --source clip.mp4
 ```
@@ -34,7 +35,7 @@ The venv at the repository root (`.venv`) has both extras installed.
 **engine** (Java 17, Maven wrapper, run from `engine/`):
 ```
 export JAVA_HOME="/c/Users/aziz/.jdks/corretto-17.0.20"   # JDK 25 is the default and will NOT work
-./mvnw -B clean test        # 178 unit, Docker-free, ~9 s
+./mvnw -B clean test        # 178 unit, Docker-free, ~20 s
 ./mvnw -B clean verify      # + 22 integration via Testcontainers, needs Docker
 ```
 
@@ -50,20 +51,37 @@ python demo/make_clip.py
 
 ## Things that will waste your time if you do not know them
 
-- **`./mvnw` fails on the default JDK.** Boot 3.0.4's Lombok cannot run on JDK 21+, and this
-  machine defaults to 25. Export `JAVA_HOME` to corretto-17 for every Maven command.
-- **`-Dtest=SomeTest` does not run `@Nested` classes.** A targeted run reports green on tests it
-  never executed. Verify with a full run.
+- **`./mvnw` fails on the default JDK, and not for the reason it looks like.** The build fails on
+  JDK 23 and on JDK 25 — this machine defaults to 25 — and passes on corretto-17. It fails as
+  hundreds of `cannot find symbol: builder()` and `getEmail()`: Lombok never ran, and javac prints
+  nothing to say so. That is not a Lombok-versus-JDK incompatibility, and correcting the Boot
+  version would not fix it. Lombok is 1.18.46 here and
+  `./mvnw clean test -Dmaven.compiler.proc=full` passes all 178 on JDK 25. javac 23 and 25 do not
+  run an annotation processor they merely find on the classpath; javac 17 does. Export `JAVA_HOME`
+  to corretto-17 for every Maven command and the question never comes up.
+- **A targeted `-Dtest=` run can still report green having executed nothing.** The old form of this
+  trap is gone: under Surefire 3.5.6, `-Dtest=EventServiceTest` runs all 39, the 3 in its `@Nested`
+  class included. Method selection did not follow. `-Dtest='EventServiceTest#allDayBucketing...'`
+  names a test inside that nested class, runs **0 tests** and exits BUILD SUCCESS; the same
+  selection against an outer method runs its 1 test. Surefire's "no tests matching pattern" guard
+  does not save you, because the class half of the pattern did match. Verify with a full run.
 - **Surefire has no `-Duser.timezone`, deliberately.** Pinning the JVM to UTC would mask the
   day-bucketing defects that three tests exist to catch.
-- **The detector's fast tier is 414, not 418.** Two tests assert that torch and cv2 *are*
-  importable — they are the guards that stop the import-blocking proofs elsewhere passing
-  vacuously — so a job without the CV stack deselects exactly those two.
+- **The detector's fast tier is 418 here and 414 in CI, and neither number is a regression.** The
+  root `.venv` has both extras, so `pytest -m "not requires_ultralytics"` selects 418 and passes
+  418, in about two seconds. CI installs no CV stack at all and passes 414, in half of one. The
+  gap is four tests and two unrelated mechanisms. Two are harness guards — in `test_main.py` and
+  `test_publisher.py` — that assert torch, cv2, ultralytics and kafka *are* importable, which is
+  what stops the import-blocking proofs elsewhere passing vacuously; they are plain asserts, so a
+  CV-free job does not deselect them by itself and they would fail rather than skip.
+  `.github/workflows/ci.yml` names both in explicit `--deselect` flags. The other two are in
+  `test_geometry.py`, `importorskip("numpy")`, and skip themselves.
 - **`tests/test_architecture.py` is load-bearing.** It parses each module's AST and fails if
   `cv2`, `ultralytics`, `kafka`, `torch` or `numpy` appears anywhere outside `adapters.py`,
-  `annotate.py` and `publisher.py`. That boundary is why the unit suite runs in under a second.
-  `__main__.py` is **not** exempt, and the check walks function bodies too, so a lazy import does
-  not escape it.
+  `annotate.py` and `publisher.py`. `__main__.py` is **not** exempt, and the check walks function
+  bodies too, so a lazy import does not escape it. That boundary is why the unit suite runs in half
+  a second on a machine with no CV stack; the two seconds it takes here are collection importing
+  torch through the integration tier's `conftest.py`, not the tests themselves.
 - **Video-file input timestamps run from the start of the clip, not the wall clock.** Events from
   a file are stored against 1 Jan 1970, so a dashboard showing today looks empty while the
   collection is full. Live camera input does not have this.
@@ -122,9 +140,9 @@ load-bearing — the controller concatenates strings.
   `model/`, `repository/`; cross-cutting config under `core/`. Lombok throughout, 2-space indent.
 - Detector modules are pure Python with injected collaborators — clock, publisher, models, sink.
   Nothing reads the wall clock except `__main__`; rules take timestamps as arguments.
-- Frontend styling is styled-components under `src/assets/wrappers/`, MUI for grids and inputs,
-  recharts for charts. Redux Toolkit 2.x for the `user` slice only; page data is `useState` +
-  `customFetch`.
+- Frontend styling is styled-components under `src/assets/wrappers/`, TanStack Table for the
+  reporting grid, recharts for charts. Redux Toolkit 2.x for the `user` slice only; page data is
+  `useState` + `customFetch`.
 - Commit messages explain **why**, in prose, not bullet lists. The git log is the primary record of
   what was measured and decided; read it before assuming something is arbitrary.
 
@@ -157,7 +175,9 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
    AES key is the urgent one: it encrypts the token that authorises a password change and that
    token has no expiry, so anyone holding it can mint a reset link for any account.
 2. **Revoke the Gmail app password** at Google. Removed from history; that does not un-leak it.
-3. **AGPL consent from Emre Yılmaz and Nil Emekci.** The only thing gating public release.
+3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
+   August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
+   it was the item everything else deferred to; 1 and 2 are what gate public release now.
 
 `~/oss-release/` holds the pre-rewrite backups and the model weights. **`best.pt` is not
 reproducible** — the training dataset is not in the repository. Do not delete that directory.
@@ -165,5 +185,5 @@ reproducible** — the training dataset is not in the repository. Do not delete 
 Both weights are now also published as assets of the [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
 pre-release, with their SHA256 in the notes, so `best.pt` is no longer a single local copy. That
 release deliberately does **not** use the `v1.0.0` tag: it carries assets, not a version of this
-code, and `v1.0.0` stays unclaimed until item 3 above clears and the repository goes public. Being
-a pre-release, it is never GitHub's "Latest", so `v1.0.0` can take that place when it is cut.
+code, and `v1.0.0` stays unclaimed until the repository goes public. Being a pre-release, it is
+never GitHub's "Latest", so `v1.0.0` can take that place when it is cut.

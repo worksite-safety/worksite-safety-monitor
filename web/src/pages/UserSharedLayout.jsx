@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 import Wrapper from '../assets/wrappers/SharedLayout';
 import {UserBigSidebar, UserSmallSidebar} from "../components";
 import Navbar from "../components/Navbar";

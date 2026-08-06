@@ -24,7 +24,16 @@ const BarChartComponent = ({ data, keysAndColors, yAxisTitle }) => {
                     >
                         {yAxisTitle}
                     </Label>
-                </YAxis>                <Tooltip />
+                </YAxis>
+                {/*
+                  recharts 3 gave Tooltip a new `itemSorter: 'name'` default that
+                  recharts 2 did not have, which reorders the rows alphabetically by
+                  series label. Measured against recharts 2.15.4 the rows came out as
+                  fall, armsUp, frontBending (the order of `keysAndColors`); under the v3
+                  default they came out as armsUp, fall, frontBending. `null` restores
+                  the payload order. There is deliberately no Legend on this chart.
+                */}
+                <Tooltip itemSorter={null} />
                 {keysAndColors.map((keyAndColor, index) => (
                     <Bar
                         key={index}
