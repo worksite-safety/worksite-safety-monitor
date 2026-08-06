@@ -150,7 +150,14 @@ public class MailService {
         + "<p>If you didn't request this change, you can ignore this email.</p>"
         + "</div>"
         + "<div class='footer'>"
-        + "<p>&copy; 2024 Code Runners Inc. All rights reserved.</p>"
+        // "© 2024 Code Runners Inc. All rights reserved." was wrong in three ways at once, in the
+        // one message this system sends to somebody who has not logged in: no such company
+        // exists, the year stopped being right in 2025, and "all rights reserved" is
+        // the opposite of what the AGPL grant says. Copyright itself is real and is held jointly
+        // by the contributors, so the years and the holder are taken from NOTICE verbatim rather
+        // than restated, which is what stops the two drifting apart again.
+        + "<p>&copy; 2023-2026 the Worksite Safety Monitor contributors. "
+        + "Licensed under AGPL-3.0-or-later.</p>"
         + "</div>"
         + "</div>"
         + "</body>"

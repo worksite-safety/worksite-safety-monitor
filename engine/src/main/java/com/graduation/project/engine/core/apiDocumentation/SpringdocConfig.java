@@ -2,7 +2,6 @@ package com.graduation.project.engine.core.apiDocumentation;
 
 import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.API_TITLE;
 import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.API_VERSION;
-import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.CONTACT_EMAIL;
 import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.CONTACT_NAME;
 import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.CONTACT_URL;
 import static com.graduation.project.engine.core.apiDocumentation.SwaggerConstant.LICENSE;
@@ -34,7 +33,9 @@ public class SpringdocConfig {
     Info myInfo = new Info();
     myInfo.title(API_TITLE)
         .version(API_VERSION)
-        .contact(new Contact().name(CONTACT_NAME).email(CONTACT_EMAIL).url(CONTACT_URL))
+        // No .email(): every field of the OpenAPI contact object is optional, so leaving it unset
+        // omits the key rather than publishing an empty one.
+        .contact(new Contact().name(CONTACT_NAME).url(CONTACT_URL))
         .license(new License().url(LICENSE_URL).name(LICENSE));
 
     return new OpenAPI().components(components).
