@@ -45,7 +45,7 @@ point of the table, so it is stated rather than smoothed over:
 
 | what | where it lived | still in history? | what was done |
 |---|---|---|---|
-| A Gmail **app password** | `spring.mail.password` in `engine/src/main/resources/application.yml` | no | **Revoke** it in the Google account that issued it |
+| A Gmail **app password** | `spring.mail.password` in `engine/src/main/resources/application.yml` | no | Revoked at Google, August 2026 |
 | The **password-reset AES key** | a 16-character literal in `PasswordService.java` | **yes — deliberately** | Rotated. See below |
 | The **JWT signing key** | never a value here — see below | no | Rotated anyway |
 
@@ -72,9 +72,9 @@ the value in the current `.env` appears in **zero** commits. A dead key sitting 
 historical artifact. A live key removed from the tip is still a live key.
 
 Relocating a credential to an environment variable changes where the value is read from. It does not
-change whether the value is compromised — which is why the Gmail app password is the one item on
-this list still needing an action outside this repository. **Revoke it at Google.** Deleting it from
-a file has never un-issued it.
+change whether the value is compromised — which is why the Gmail app password needed an action
+outside this repository, and got one: it was **revoked at Google in August 2026**. Deleting it from
+a file had never un-issued it. Any copy still sitting in an old clone now authenticates nothing.
 
 ### How far it got
 
@@ -85,9 +85,9 @@ preparing for, so nothing in it has been world-readable. Its predecessor,
 exposure is therefore to everyone who has ever had read access to either — a small, known set — and
 not to the internet.
 
-That is a reason to revoke the Gmail password calmly rather than a reason not to revoke it. "Only
+That was a reason to revoke the Gmail password calmly rather than a reason not to revoke it. "Only
 the people with access saw it" is an assumption about every clone, CI cache and editor backup those
-people made, and it is not one this project is willing to bet an account on.
+people made, and it was not one this project was willing to bet an account on. It is revoked.
 
 ### Why the password-reset key was the one that mattered
 

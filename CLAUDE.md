@@ -169,7 +169,11 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
 - A `FALL` emails **every registered user**.
 - One camera, one role, no refresh tokens, no Kafka schema registry, no volume on Kafka.
 
-## Outstanding, and blocking release
+## What used to block release, and why none of it does now
+
+All three items are closed. They are kept rather than deleted because each one was the reason
+something else was deferred, and because two of them turned out to be smaller than this file
+claimed — which is worth remembering the next time it claims something.
 
 1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY` — done, and this entry says less than it
    used to on purpose.** It claimed both old values were in git history. Only one was. The AES
@@ -179,10 +183,12 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
    `JwtService.java` blobs hold `SECRET_KEY = "${JWT_SECRET}"`, an unresolved placeholder, and a
    scan of all 663 blobs in the object database finds no 64-hex string at all. Both values now in
    `.env` appear in zero commits. Generate a pair with `scripts/init-env.sh`.
-2. **Revoke the Gmail app password** at Google. This is the only item still gating public release.
-   Removed from history; that does not un-leak it. The account is `coderunners24@gmail.com`, and
-   the exposure is narrow — this repository and its predecessor are both private with 0 forks — but
-   narrow is not zero, and every clone and CI cache taken while it was pushed still has it.
+2. **Revoke the Gmail app password — done, August 2026.** The account was
+   `coderunners24@gmail.com`. Removing it from history never un-issued it, and the exposure was
+   narrow but not zero: this repository and its predecessor are both private with 0 forks, yet
+   every clone and CI cache taken while it was pushed still holds it. Those copies now authenticate
+   nothing. A Gmail app password grants IMAP as well as SMTP, so what this closed was read access to
+   that mailbox, not only the ability to send as it.
 3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
    August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
    it was the item everything else deferred to; 1 and 2 are what gate public release now.
