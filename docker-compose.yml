@@ -1,7 +1,12 @@
 # Worksite safety monitor - the whole system, on one machine, from a clean clone.
 #
-#     cp .env.example .env      # then fill in the four secrets it names
+#     ./scripts/init-env.sh     # writes .env, generating the two crypto keys
 #     docker compose up --build
+#
+# `.env.example` ships JWT_SECRET and PASSWORD_RESET_AES_KEY EMPTY, so that the
+# `${VAR:?...}` guards below fire and name what is missing. Copying it by hand
+# works too - the other two secrets have demo-usable values - but then those two
+# keys are yours to generate.
 #
 #     web      http://localhost:3000
 #     API      http://localhost:8080/docs/swagger-ui.html
