@@ -52,6 +52,36 @@ RUN --mount=type=cache,target=/root/.m2 \
 # ---------------------------------------------------------------------------
 FROM eclipse-temurin:17-jre-alpine AS runtime
 
+# Patch the OS packages the JRE layer brings in. Trivy on this image reported
+# three HIGH CVEs and all three were Alpine packages, none of them ours:
+# libexpat 2.8.1-r0 (CVE-2026-56408), and p11-kit + p11-kit-trust 0.25.5-r2
+# (CVE-2026-2100). The dependency upgrade that cleaned the jar layer down to
+# five MEDIUMs could not reach them, because they are not on our dependency
+# tree at all - they arrive with the base.
+#
+# The two cheaper answers were measured rather than assumed, and both fail.
+# `docker build --pull` changes nothing: a fresh pull of
+# eclipse-temurin:17-jre-alpine is still Alpine 3.23.5 carrying those same three
+# versions. And there is no newer tag to move to - 17-jre-alpine and
+# 17-jre-alpine-3.23 resolve to the same image id, every 17-jre-alpine* tag was
+# last rebuilt 2026-06-22, and Temurin publishes no Alpine 3.24 variant for 17.
+# Upstream simply has not rebuilt, which is the whole problem.
+#
+# The patched packages do exist, in the branch this image is already pinned to:
+# v3.23/main serves libexpat 2.8.2-r0 and p11-kit 0.26.2-r0 today. So `apk
+# upgrade` takes them from the same repository the next line would use anyway,
+# and the image stays on Alpine 3.23 rather than changing distribution to dodge
+# three CVEs.
+#
+# The fair objection is that this makes the build depend on when it runs. It
+# does - but the `apk add` immediately below has never pinned a version either,
+# so this introduces no new class of drift. Pinning the exact -r0 releases would
+# be worse than not pinning: Alpine keeps only the newest build of each package
+# per branch, so an exact pin breaks the build outright the day 3.23 ships a
+# successor. Delete this line once Temurin rebuilds its Alpine images and the
+# tag carries the fixes on its own.
+RUN apk upgrade --no-cache
+
 # fontconfig + a real font family, for iText. EventService.generateEventsPdf
 # builds the emailed report with iText 5, which resolves its base-14 fonts
 # through the JDK's font machinery; on a font-less Alpine that surfaces as a
