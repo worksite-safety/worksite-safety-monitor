@@ -11,11 +11,15 @@ import LineChart from "./LineChartComponent";
 import AreaChart from "./AreaChart";
 import PieChartComponent from "./PieChartComponent";
 import DataTable from "./DataTable";
+import SafetyNotice from "./SafetyNotice";
+import SiteFooter from "./SiteFooter";
 
 export {
     NavBar,
     Logo,
     FormRow,
+    SafetyNotice,
+    SiteFooter,
     UserBigSidebar,
     UserSmallSidebar,
     UserNavLinks,

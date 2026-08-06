@@ -62,4 +62,39 @@ describe('App', () => {
         expect(screen.getByRole('heading', {name: /Page Not Found/i}))
             .toBeInTheDocument();
     });
+
+    // The footer is mounted outside <Routes> precisely so that no route can be
+    // reached without it. AGPL section 13 owes the source offer to whoever
+    // interacts with the program over a network, which includes a visitor who
+    // has not logged in and one who mistyped the URL -- so both are checked.
+    it('offers the source to a visitor who has not logged in', () => {
+        renderApp(null);
+
+        expect(screen.getByRole('link', {name: /source code/i}))
+            .toHaveAttribute('href', 'https://github.com/worksite-safety/worksite-safety-monitor');
+    });
+
+    it('offers the source on the not-found page too', () => {
+        window.history.pushState({}, '', '/no-such-page');
+
+        renderApp(null);
+
+        expect(screen.getByRole('link', {name: /source code/i})).toBeInTheDocument();
+    });
+
+    it('warns a logged-out visitor that the system is not certified', () => {
+        renderApp(null);
+
+        expect(screen.getByText(/not a certified safety system/i)).toBeInTheDocument();
+    });
+
+    it('no longer claims the landing page protects lives', () => {
+        renderApp(null);
+
+        // The old tagline was "Protecting Lives, One Frame at a Time". Fall
+        // detection scores mAP@0.5 = 0.589 and neither gesture detector has
+        // ever fired on real footage, so the claim was not one the measurements
+        // supported. This case is here to stop it drifting back.
+        expect(screen.queryByText(/protecting lives/i)).not.toBeInTheDocument();
+    });
 });

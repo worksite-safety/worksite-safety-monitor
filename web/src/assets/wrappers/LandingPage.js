@@ -10,7 +10,7 @@ const Wrapper = styled.main`
     align-items: center;
   }
   .page {
-    min-height: calc(100vh - var(--nav-height));
+    min-height: calc(100vh - var(--nav-height) - var(--footer-height));
     display: grid;
     align-items: center;
     margin-top: -3rem;
