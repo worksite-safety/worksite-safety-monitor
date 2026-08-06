@@ -49,9 +49,10 @@ the camera preview page. The engine's base URL is `VITE_API_URL`, baked in at bu
 
 There is no top-level build. Each module is started separately. A `docker-compose.yml` at the
 repository root, with a Dockerfile per module, brings the whole stack up together — Kafka, MongoDB
-and the three services — and feeds the detector a mounted video file rather than a camera. Copy
-`.env.example` to `.env` first. That compose file is thoroughly commented and is the thing to read
-before relying on it.
+and the three services — and feeds the detector a mounted video file rather than a camera. Run
+`scripts/init-env.sh` first: it writes the `.env` compose reads, generating the two keys that have no
+safe default rather than leaving you a placeholder that looks filled in and is not. That compose file
+is thoroughly commented and is the thing to read before relying on it.
 
 It has been brought up cold twice — clean build cache, no volumes — reaching all-healthy in about
 15 seconds, with events arriving in MongoDB, the camera preview served, and an unauthenticated
@@ -248,12 +249,42 @@ detections, so every helmet assertion in the suite is synthetic. See
 [`DIFFERENTIAL.md`](detector/tests/data/baseline/DIFFERENTIAL.md) for what the recorded trace can and
 cannot prove.
 
+**`FALL` has never been verified against ground truth.** This is the one to read twice, because it is
+the event the system exists to catch. The baseline clip does produce `fall` detections — 19 of them,
+between 15733 ms and 25800 ms — but those are the model's own output, and **nothing in this
+repository checks them against a human-labelled answer.** There is no annotated clip here, and the
+trace cannot even settle how many incidents it is looking at: `DIFFERENTIAL.md` states outright that
+whether the detections at 15733 ms and 24066 ms are one fall or two "is a question this trace cannot
+answer". What the differential proves is that the rewrite reports the earlier incident 8.3 s sooner
+than the original did, which is a statement about two pieces of code, not about a worksite.
+
+The number to hold alongside it is the one in the table above: `fall` scores mAP@0.5 = 0.589 on the
+validation split and is missed as background 35% of the time. **Do not deploy this as the thing that
+notices a person has fallen.** It is a second pair of eyes with a measured miss rate of roughly one
+in three, and treating it as a safety device rather than an assistive one would be a misreading of
+every number on this page.
+
 **The video "stream" is not a stream.** The detector overwrites a single `output_image.jpg` on disk
 every frame; the engine serves that one file from a public, unauthenticated endpoint; the browser
 polls it. There is no protocol, no buffering, and no way to seek.
 
 **A `FALL` emails every registered user in the database.** Not a subscriber list, not a role — every
 row in the users collection, on every fall that clears the detector's cooldown (default 3 minutes).
+
+**`best.pt` cannot be reproduced from this repository.** The training dataset is not here and is not
+distributable, so while `detector/training/` carries the exact hyperparameters and the per-epoch
+metrics for the run that produced the weights, nothing in a clone can run that training again. The
+file is an artifact you download, not one you can rebuild: verify it against the SHA256 in the
+`weights-v1` release notes, because a `best.pt` that does not match is not the model any number on
+this page was measured from. Retraining from your own data would produce a different model, and every
+figure above would then describe something you are not running.
+
+**Kafka has no volume, deliberately.** The broker is the transport here, not the record: everything
+the engine keeps is in MongoDB. The consequence is that events still in flight do not survive a
+broker restart — and, because the detector is the only producer and it publishes live, a broker that
+is down or restarting drops the events observed during that window rather than replaying them
+afterwards. A failed publish costs one `WARNING` and a counter reported at shutdown; it does not stop
+detection, and nothing retries it.
 
 **One camera, one role, no refresh tokens, no schema registry.** `Role` has exactly one value,
 `ADMIN`, so "admin-only" endpoints mean "any logged-in user". JWTs last 20 minutes and there is no
@@ -269,9 +300,15 @@ same number and collapses every window and throttle. Use a numeric camera index 
 
 ## Security
 
-Three credentials were committed to this repository's history: a Gmail app password, the JWT signing
-key and the AES key behind password-reset links. The history has been rewritten, and **all three
-must still be rotated or revoked** — rewriting does not un-leak anything already cloned.
+Two credentials were committed to this repository's history: a Gmail app password and the AES key
+behind password-reset links. **The JWT signing key was not** — every historical copy of
+`JwtService.java` holds the unresolved placeholder `"${JWT_SECRET}"` rather than a value, and there
+is no 64-hex string anywhere in the object database.
+
+Both keys have been rotated. The Gmail app password **still needs revoking at Google**, because
+deleting a credential from a file has never un-issued it. And the AES key is still in the history, on
+purpose: [SECURITY.md](SECURITY.md) names the commits, and says why rewriting them would have bought
+the appearance of a fix rather than a fix.
 
 Read [SECURITY.md](SECURITY.md) before deploying this anywhere, and to report a vulnerability.
 
@@ -284,6 +321,7 @@ Read [SECURITY.md](SECURITY.md) before deploying this anywhere, and to report a 
 | [docs/architecture.md](docs/architecture.md) | the event pipeline, the taxonomy, the auth flow, the contracts between the three modules |
 | [docs/development.md](docs/development.md) | running each module, running the tests, adding a new event type |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | how to propose a change |
+| [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | the behaviour expected of participants, and who to tell |
 | [CHANGELOG.md](CHANGELOG.md) | what changed, release by release |
 | [SECURITY.md](SECURITY.md) | reporting a vulnerability, and the credentials in the history |
 | [detector/tests/data/baseline/](detector/tests/data/baseline/) | the recorded trace, its provenance, and the measured differential against the original implementation |

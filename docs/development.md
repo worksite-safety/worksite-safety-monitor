@@ -10,9 +10,24 @@ Defaults everywhere assume localhost: Kafka `:9092`, MongoDB `:27017`, engine `:
 
 | module | needs |
 |---|---|
-| detector | Python 3.11+. For anything beyond the unit tests: the `[cv]` extra (ultralytics, opencv-python, kafka-python-ng) and both `.pt` weight files in `detector/models/` |
-| engine | JDK 17, the bundled Maven wrapper. A reachable MongoDB and Kafka to do anything useful. Docker for the integration tier |
+| detector | Python 3.11+. For anything beyond the unit tests: the `[cv]` extra (ultralytics, opencv-python, kafka-python-ng — roughly 2 GB, mostly torch) and both `.pt` weight files in `detector/models/` |
+| engine | **JDK 17 specifically** — see below. The bundled Maven wrapper. A reachable MongoDB and Kafka to do anything useful. Docker for the integration tier |
 | web | Node.js and npm |
+
+### The engine needs JDK 17, and a newer JDK fails in a way that does not say so
+
+`./mvnw` builds on JDK 17 and fails on JDK 23 and JDK 25. It fails as hundreds of `cannot find
+symbol: builder()` and `getEmail()` — Lombok never ran, and javac prints nothing to say so. javac 23
+and later do not run an annotation processor they merely find on the classpath; javac 17 does. It is
+not a Lombok-versus-Java-version incompatibility and correcting the Spring Boot version would not
+fix it.
+
+Point `JAVA_HOME` at a JDK 17 for every Maven command — `export JAVA_HOME=/path/to/jdk-17` in a
+POSIX shell, `$env:JAVA_HOME = "C:\path\to\jdk-17"` in PowerShell — and the question never comes up.
+
+If you must build on a newer JDK, `./mvnw clean test -Dmaven.compiler.proc=full` passes: the
+annotation processor runs when it is asked for explicitly. But 17 is the supported toolchain, it is
+what `engine/pom.xml` sets `java.version` to, and it is what CI installs.
 
 Model weights are not in git (`.gitignore` excludes `*.pt`). Both are attached to the
 [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
@@ -35,7 +50,19 @@ detector refuses to start without them and prints the release URL and the comman
 
 ## Configuration and secrets
 
-Nothing secret is committed. Copy the example files and fill them in:
+Nothing secret is committed, and **copying an example file is not enough on its own** — two of the
+variables have no safe default and the examples ship them empty rather than pre-filled, so that a
+placeholder cannot be mistaken for a value. For the compose stack, generate them:
+
+```bash
+scripts/init-env.sh          # writes .env, generating JWT_SECRET and PASSWORD_RESET_AES_KEY
+```
+
+It runs `openssl rand` for both keys, leaves the rest at the example's defaults, and refuses to
+overwrite a `.env` that already exists. If you skip it, `docker compose up` stops before any
+container starts and names the variable it is missing — which is the design, not a bug.
+
+The example files, and what each covers:
 
 - [`engine/.env.example`](../engine/.env.example) — four variables are **required** and have no
   fallback, so the application context refuses to start without them: `MAIL_USERNAME`,
@@ -50,8 +77,10 @@ Nothing secret is committed. Copy the example files and fill them in:
 - [`.env.example`](../.env.example) at the repository root — what `docker compose` reads, covering
   all three modules plus the demo clip and the host ports.
 
-Read [SECURITY.md](../SECURITY.md) before pointing this at anything real. Three credentials were in
-the git history and must be rotated or revoked.
+Read [SECURITY.md](../SECURITY.md) before pointing this at anything real. Two credentials were
+committed to this repository's history; both keys have since been rotated, the Gmail app password
+still needs revoking at Google, and the dead AES key is still in the history on purpose. That file
+explains which and why.
 
 ---
 
@@ -97,7 +126,10 @@ pytest -m requires_ultralytics          # the integration tier alone
 pytest tests/test_baseline_differential.py    # the rewrite measured against the original
 ```
 
-Measured on this repository at the v1.0.0 commit. The fast tier is the whole point of the
+Measured on this repository at the tip of `main` — there is no release tag to quote instead. The
+counts move with the venv: a machine with the `[cv]` extra installed selects 418 in the fast tier,
+and CI, which installs no CV stack at all, deselects two harness guards by name and passes 414.
+Neither is a regression. The fast tier is the whole point of the
 architecture boundary: `tests/test_architecture.py` reads the AST of every module and fails if
 anything except `adapters.py`, `annotate.py` and `KafkaEventPublisher.connect` imports `cv2`,
 `ultralytics`, `kafka`, `torch` or `numpy`. On a machine with only the `[dev]` extra installed, a
@@ -180,8 +212,16 @@ milliseconds and stamps `schemaVersion = 2`. It is idempotent but **off by defau
 (`event.migration.periodic-to-millis.enabled: false`): a data migration must be something an operator
 turns on deliberately for one boot, never something that fires because a pod restarted.
 
-If you have data written before this release, the order is: run the migration once, then flip
-`event.periodic.input-unit` to `MILLIS` when the rewritten detector is deployed.
+`event.periodic.input-unit` already ships as `MILLIS` — in `engine/src/main/resources/application.yml`
+and in `docker-compose.yml` — because the detector in this repository publishes milliseconds. There is
+nothing to flip for a fresh install.
+
+If you have data written by the *old* producer, the order matters: set the flag to `SECONDS` while
+that producer is still live, run the migration once against the existing collection, then set it back
+to `MILLIS` as you deploy the rewritten detector. `SECONDS` is also the annotation default in
+`RawEventService` (`${event.periodic.input-unit:SECONDS}`), which is what an old deployment gets if
+it picks up this code with no such property configured at all — deliberately the pre-migration
+reading, so that nothing silently reinterprets data it did not write.
 
 ---
 
@@ -220,12 +260,12 @@ Run by hand, you need: Kafka on `:9092`, MongoDB on `:27017`, the engine on `:80
 `:3000`, and a detector process pointed at a camera or a clip.
 
 `docker-compose.yml` at the repository root brings all of that up together, with a Dockerfile per
-module. Copy the root [`.env.example`](../.env.example) to `.env` first — compose reads it
-automatically and refuses to start without the four engine secrets — and put a video file where
-`DEMO_VIDEO_DIR`/`DEMO_VIDEO` point, because no footage ships with this repository and the detector
-service is fed a mounted file rather than a camera device (a device passthrough would be Linux-only).
+module. Three things a fresh clone does not have and compose will not conjure: the two `.pt` weight
+files, a `.env` with real keys in it, and a video file where `DEMO_VIDEO_DIR`/`DEMO_VIDEO` point. No
+footage ships with this repository, and the detector service is fed a mounted file rather than a
+camera device, because a device passthrough would be Linux-only.
 
-`demo/make_clip.py` builds one if you have nothing to hand. It assembles a clip from the two sample
+`demo/make_clip.py` builds a clip if you have nothing to hand. It assembles one from the two sample
 photographs inside the `ultralytics` package — two populated stretches with an empty one between
 them, so a violation window opens, a person-free stretch closes it, and a second one opens. It
 produces genuine detections (a `NO_HELMET` and a `NO_JACKET`, each lasting about eleven seconds,
@@ -233,11 +273,35 @@ comfortably past the engine's three-second floor), but it is synthetic and says 
 worksites. It is generated rather than committed on purpose: five megabytes of video that proves
 nothing does not belong in a repository whose history was rewritten to get binaries out of it.
 
+Note what that costs: `make_clip.py` reads those images out of the installed `ultralytics` package,
+so it needs the `[cv]` extra — roughly 2 GB, most of it torch. If you already have footage, point
+`DEMO_VIDEO_DIR` at it and you can skip the install entirely.
+
+From the repository root, in order:
+
 ```bash
-cp .env.example .env
-python demo/make_clip.py     # or point DEMO_VIDEO_DIR at your own footage
+# 1. Weights. Not in git; both are assets of the weights-v1 pre-release.
+gh release download weights-v1 --repo worksite-safety/worksite-safety-monitor \
+  --pattern '*.pt' --dir detector/models
+
+# 2. Secrets. Generates the two keys that have no safe default and writes .env.
+#    `cp .env.example .env` is NOT enough: the example ships them empty on
+#    purpose, so that a placeholder cannot be mistaken for a value.
+scripts/init-env.sh
+
+# 3. Footage. Skip entirely if DEMO_VIDEO_DIR already points at your own.
+#    make_clip.py imports cv2 and ultralytics, so it needs the [cv] extra:
+#    (cd detector && pip install -e ".[cv]")   -- roughly 2 GB, mostly torch
+python demo/make_clip.py
+
+# 4. Up.
 docker compose up
 ```
+
+Step 2 is not optional and it is not silent. Compose reads `.env` automatically, and each required
+secret is declared `${VAR:?...}`, so a missing one stops the stack **before any container starts**,
+naming the variable and the command that generates it. That is the design: a stack that boots on a
+placeholder key is worse than one that refuses to boot.
 
 The compose file sets the two halves of the preview path so they agree — the engine's
 `EVENT_IMAGE_PATH` and the detector's `WSM_OUTPUT__ANNOTATED_FRAME_PATH` both point into one shared
