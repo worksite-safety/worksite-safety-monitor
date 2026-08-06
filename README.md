@@ -14,7 +14,7 @@ Three modules, each independently runnable, joined by exactly two contracts: a K
 REST API.
 
 ```
-  detector  (Python 3.11+, YOLOv8)          engine  (Java 17, Spring Boot 3.0.4)        web  (React)
+  detector  (Python 3.11+, YOLOv8)          engine  (Java 17, Spring Boot 3.5.16)       web  (React)
   ─────────────────────────────────         ──────────────────────────────────────      ───────────
   camera or video file                                                                  charts
         │                                                                               events grid

@@ -58,8 +58,10 @@ Naming matters, because both build tools select by filename:
   repository were silently skipped for the whole graduation project.
 - **web**: Vitest, `src/**/*.{test,spec}.{js,jsx}` (`vite.config.js`), run with `npm test`.
 
-One trap worth repeating from the commit log: `-Dtest=SomeTest` does **not** run `@Nested` classes,
-so a targeted run can report green on tests that never executed. Verify with a full run.
+One trap worth repeating from the commit log: a targeted `-Dtest=` run can report green on tests
+that never executed. Surefire 3.5.6 fixed the `@Nested` half of it — naming the class now runs the
+nested tests too — but naming a *method* that lives in a nested class runs nothing at all and still
+exits successfully. Verify with a full run.
 
 ## Style
 

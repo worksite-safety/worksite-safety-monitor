@@ -144,7 +144,7 @@ Swagger UI: `http://localhost:8080/docs/swagger-ui.html`. OpenAPI JSON: `http://
 ### Tests
 
 ```bash
-./mvnw test                     # Surefire only: 172 tests, no Docker
+./mvnw test                     # Surefire only: 178 tests, no Docker
 ./mvnw verify                   # Surefire, then Failsafe — needs a running Docker daemon
 ```
 
@@ -161,8 +161,11 @@ Coverage: `target/site/jacoco/` after `test` or `package` (unit only), and
 
 Two traps recorded in the commit log, both of which produce a green run that proved nothing:
 
-- **`-Dtest=SomeTest` does not run `@Nested` classes.** A targeted run can report success on tests
-  that never executed. Verify with a full run.
+- **A targeted `-Dtest=` run can report success on tests that never executed.** Surefire 3.5.6 no
+  longer skips `@Nested` classes — `-Dtest=EventServiceTest` runs all 39, its nested 3 included —
+  but selecting a *method* inside a nested class by name runs 0 tests and still exits BUILD
+  SUCCESS, because the class half of the pattern matched and the "no tests matching pattern" guard
+  never fires. Verify with a full run.
 - **Testcontainers 1.21.3 negotiates Docker Engine API v1.32, which Docker 29 refuses**, reporting it
   as "Could not find a valid Docker environment" — indistinguishable from an absent daemon. The API
   version is pinned in `AbstractIntegrationTest` so IDE runs work too.
