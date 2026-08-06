@@ -632,12 +632,17 @@ jobs:
       # edits files while merging, lands content that no ordinary commit ever
       # carried. Measured on a purpose-built repository - two secrets of
       # identical shape, one committed normally and one added only while
-      # merging - `gitleaks dir` found both and `gitleaks git` found one. This
-      # repository has 28 merges among 110 commits; the default walk scanned 83.
+      # merging - `gitleaks dir` found both and `gitleaks git` found one. Merges
+      # are a large fraction of this history and the default walk skips every one
+      # of them; at the commit where this was measured that was 28 of 110, with
+      # the default walk reaching 83. Those counts move with every merge, so
+      # treat them as the measurement that motivated the flag, not as a current
+      # figure.
       #
       # --diff-merges=remerge is what fixes it: it shows only what the merge
-      # ITSELF introduced, over and above merging the parents. Here that is 86
-      # commits instead of 83, 804 extra bytes and about two seconds. `-m` and
+      # ITSELF introduced, over and above merging the parents. That reaches the
+      # merge commits the default walk skips, for 804 extra bytes and about two
+      # seconds. `-m` and
       # --diff-merges=first-parent also work and were measured too, but both
       # re-scan the whole of every merged branch (+490 KB) and report each
       # finding twice. Everything else in the string is what gitleaks passes by

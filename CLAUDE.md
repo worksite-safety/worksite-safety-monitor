@@ -26,7 +26,9 @@ Each module runs on its own. There is no top-level build. `docker compose up` ru
 pip install -e .[dev]                       # no torch, fast
 pip install -e .[cv]                        # ultralytics, opencv, kafka -- ~2 GB
 pytest -m "not requires_ultralytics"        # 418 pass in ~2 s, the inner loop
-pytest                                      # 481 collected: 465 pass, 16 skip, ~4 s
+pytest                                      # 481, ~8 s. 16 of them skip on a machine
+                                            # without the gitignored weights and baseline
+                                            # traces; with those present all 481 pass
 ruff check src tools
 python -m worksite_detector --dry-run --source clip.mp4
 ```
@@ -191,7 +193,7 @@ claimed — which is worth remembering the next time it claims something.
    that mailbox, not only the ability to send as it.
 3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
    August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
-   it was the item everything else deferred to; 1 and 2 are what gate public release now.
+   it was the item everything else deferred to.
 
 `~/oss-release/` holds the pre-rewrite backups and the model weights. **`best.pt` is not
 reproducible** — the training dataset is not in the repository. Do not delete that directory.
