@@ -1,6 +1,6 @@
 # web — Worksite AI Guardian dashboard
 
-React 18 single-page app, built with [Vite](https://vite.dev). Charts, the event
+React 19 single-page app, built with [Vite](https://vite.dev). Charts, the event
 report grid and the video preview for the worksite safety monitor; it talks to
 the `engine` REST API over JWT.
 

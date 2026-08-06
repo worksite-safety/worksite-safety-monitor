@@ -122,9 +122,9 @@ load-bearing — the controller concatenates strings.
   `model/`, `repository/`; cross-cutting config under `core/`. Lombok throughout, 2-space indent.
 - Detector modules are pure Python with injected collaborators — clock, publisher, models, sink.
   Nothing reads the wall clock except `__main__`; rules take timestamps as arguments.
-- Frontend styling is styled-components under `src/assets/wrappers/`, MUI for grids and inputs,
-  recharts for charts. Redux Toolkit 2.x for the `user` slice only; page data is `useState` +
-  `customFetch`.
+- Frontend styling is styled-components under `src/assets/wrappers/`, TanStack Table for the
+  reporting grid, recharts for charts. Redux Toolkit 2.x for the `user` slice only; page data is
+  `useState` + `customFetch`.
 - Commit messages explain **why**, in prose, not bullet lists. The git log is the primary record of
   what was measured and decided; read it before assuming something is arbitrary.
 

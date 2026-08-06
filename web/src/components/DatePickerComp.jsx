@@ -3,9 +3,19 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "./datePicker.css";
 import {toast} from "react-toastify";
-import EmailIcon from '@mui/icons-material/Email';
+// Was @mui/icons-material/Email. MdEmail is the same Material "email" glyph
+// (identical path data, 24x24 viewBox), but react-icons sizes to 1em while
+// MUI's SvgIcon was a fixed 1.5rem -- and this button never sets a font-size,
+// so 1em would collapse to the UA button default (~13px). ICON_SIZE pins the
+// rendered size to what MUI drew.
+import {MdEmail} from 'react-icons/md';
 import {useSelector} from "react-redux";
 import customFetch from "../util/axios";
+
+// MUI SvgIcon's default fontSize="medium" resolved to 1.5rem (24px at the
+// app's 100% root font size). Keep it in rem so it still tracks a user's
+// browser font-size preference the way the MUI icon did.
+const ICON_SIZE = "1.5rem";
 
 const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) => {
   const [startDate, setStartDate] = useState(null);
@@ -116,7 +126,7 @@ const DateRangePickerComp = ({ onApply, applyButtonLabel, clearButtonLabel }) =>
                 onClick={applyReportSend}
                 disabled={loading} // Disable button during loading
             >
-              <EmailIcon />
+              <MdEmail style={{fontSize: ICON_SIZE}} aria-hidden="true" focusable="false"/>
               Send Report
             </button>
         ) : (

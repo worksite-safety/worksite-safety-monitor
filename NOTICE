@@ -29,7 +29,7 @@ Third-party work this project derives from
 ================================================================================
 
 This file records source that was taken from other projects and modified. It is
-not a dependency list: ordinary declared dependencies (Spring Boot, React, MUI,
+not a dependency list: ordinary declared dependencies (Spring Boot, React,
 recharts, PyYAML, ...) are fetched by the build and are not redistributed here.
 
 Two upstreams are recorded, under two different licences. Both permit being

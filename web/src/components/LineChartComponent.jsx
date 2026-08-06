@@ -21,8 +21,17 @@ const LineChartComponent = ({ data, keysAndColors, yAxisTitle }) => {
                         {yAxisTitle}
                     </Label>
                 </YAxis>
-                <Tooltip />
-                <Legend />
+                {/*
+                  recharts 3 changed two sort defaults that recharts 2 did not have:
+                  Tooltip gained `itemSorter: 'name'` and Legend gained
+                  `itemSorter: 'value'`, both of which reorder the series alphabetically
+                  by label. Measured against recharts 2.15.4: rows/entries came out as
+                  fall, armsUp, frontBending (the order of `keysAndColors`); under the v3
+                  defaults they came out as armsUp, fall, frontBending. `null` restores
+                  the payload order.
+                */}
+                <Tooltip itemSorter={null} />
+                <Legend itemSorter={null} />
                 {keysAndColors.map((keyAndColor, index) => (
                     <Line
                         key={index}

@@ -4,7 +4,7 @@ import {useDispatch, useSelector} from "react-redux";
 import {Logo} from "./index";
 import {logoutUser, toggleSidebar} from "../features/user/userSlice";
 import {useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useNavigate} from "react-router";
 
 const Navbar = () => {
     const [showLogout, setShowLogout] = useState(false)
