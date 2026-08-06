@@ -1,11 +1,17 @@
 # gitleaks configuration for the secrets job in ci.yml.
 #
-# This file exists because gitleaks reports EIGHT findings against this
-# repository's history with its default ruleset, and all eight are false
+# This file exists because gitleaks reports NINE findings against this
+# repository's history with its default ruleset, and all nine are false
 # positives. Every one is a deliberately fake credential in a test fixture:
 # dummy signing keys, a dummy AES key and a dummy SMTP password in
 # engine/src/test/resources/application.yml and in the test classes that assert
-# the engine refuses to start without them.
+# the engine refuses to start without them, plus a JWT-shaped string in web's
+# axios test.
+#
+# (It was EIGHT when this file was written, and said so until the count was
+# re-measured. The ninth is web/src/util/axios.test.js, which arrived with the
+# Vite migration. Both numbers were true when written; only one of them was
+# true when read, which is the failure mode this whole file is trying to avoid.)
 #
 # Left alone, that is a job which is red on the day it is added, for reasons
 # nobody can fix, on a codebase that is correct. Everyone learns within a week
@@ -16,15 +22,38 @@
 # ---------------------------------------------------------------------------
 # WHAT IT MISSES - measured, not assumed.
 #
-# gitleaks 8.28.0 was run against reconstructions of the credentials this
-# repository actually leaked, each one in isolation. Results:
+# An earlier version of this file carried a table of results against
+# RECONSTRUCTIONS of the credentials this repository leaked - strings of the
+# same shape, not the strings themselves. One row of it read:
+#
+#     AES key, 16 chars, letters AND digits, quoted in Java ...... found
+#
+# The real password-reset AES key is sixteen characters of letters and digits.
+# So a reader arrived, correctly by the words on the page and wrongly in fact,
+# at "the AES key would be caught if it came back". It would not. Entropy is a
+# property of the actual characters, not of which character classes appear, and
+# the reconstruction that was tested was simply more random than the real thing:
+#
+#     literal                measured Shannon entropy   generic-api-key floor
+#     ---------------------  -------------------------  ---------------------
+#     the reconstruction     3.58                       3.5   -> reported
+#     the REAL AES key       2.53                       3.5   -> DISCARDED
+#
+# The real key is `5A7134743777217A`: sixteen characters, but only seven
+# distinct ones, and the digit 7 occurs six times. That is what puts it a full
+# point under the floor. Confirmed end to end, not just arithmetically: the
+# literal is present in the patches of three commits reachable from main, and a
+# scan of the whole history with the default ruleset reports it in none of them.
+#
+# So the honest table, against the credentials THEMSELVES:
 #
 #   Gmail app password, 16 lowercase letters, in YAML .......... NOT FOUND
 #   JWT signing key, 64 hex chars, unquoted in YAML ............ NOT FOUND
 #   JWT signing key, 64 hex chars, quoted in Java .............. NOT FOUND
-#   AES key, 16 chars, letters only, quoted in Java ............ NOT FOUND
-#   AES key, 16 chars, letters AND digits, quoted in Java ...... found
+#   AES key `5A7134743777217A`, quoted in Java ................. NOT FOUND
 #   SMTP username (an e-mail address) .......................... NOT FOUND
+#
+# FIVE FOR FIVE, MISSED, by the default ruleset.
 #
 # The mechanism is in gitleaks' own rule source, cmd/generate/config/rules/
 # generic.go. The `generic-api-key` rule - the only one any of these could match
@@ -32,47 +61,128 @@
 # The allowlist exists to suppress ordinary English words appearing next to the
 # word "password" in config files, and it cannot distinguish one from a
 # Google-issued app password, because at the level of a regex they are the same
-# string: letters, and nothing else. So the single credential in this
-# repository's history with real blast radius is the one the rule is guaranteed
-# to discard.
+# string: letters, and nothing else. The AES key clears that allowlist - it has
+# digits in it - and dies on the entropy floor instead.
 #
-# The one that IS found is found by luck: it happened to contain digits, which
-# put it past the allowlist, and its entropy was 3.58 against a floor of 3.5.
-# Had it been letters only it would have been missed too.
+# The floor is not peculiar to generic-api-key. `AKIA2E0A8F3B244C9986` is a
+# syntactically perfect AWS access key id and gitleaks does not report it, while
+# `AKIAZXQW7RYT4LMBNVCD` (entropy 4.22) is reported instantly. A secret that
+# does not look random is a secret this tool does not see, whatever its shape.
 #
-# Read that table before reading a green tick as an assurance. It is a net for
-# the shapes gitleaks anticipates - AWS keys, GitHub and Slack tokens, PEM
-# blocks, service-account JSON - and those are worth a net. It is not evidence
-# that this repository is clean. The four real credentials were found by a
-# person reading application.yml and PasswordService.java, which is still the
-# only method with a record of working here.
+# Read that before reading a green tick as an assurance. It is a net for the
+# shapes gitleaks anticipates - AWS keys, GitHub and Slack tokens, PEM blocks,
+# service-account JSON - and those are worth a net. It is not evidence that this
+# repository is clean. The four real credentials were found by a person reading
+# application.yml and PasswordService.java, which is still the only method with
+# a record of working here.
+#
+# ---------------------------------------------------------------------------
+# WHAT WAS DONE ABOUT IT.
+#
+# A scan that documents its own blindness is still blind. Three specific holes
+# were closed. Each is narrow, and each was measured before and after:
+#
+#   1. The AES key has an explicit rule of its own now (below), so the one
+#      credential this file used to claim was covered actually is.
+#
+#   2. MERGE COMMITS ARE NOW SCANNED. They were not, and nothing said so.
+#      `git log -p` prints no patch for a merge, so anything introduced in one -
+#      a conflict resolution, or an "evil merge" that edits files while merging
+#      - was invisible to this job. Demonstrated on a purpose-built repository:
+#      two secrets of identical shape, one committed normally and one added only
+#      while merging; `gitleaks dir` found both, `gitleaks git` found one.
+#      This repository has 28 merges among 110 commits and the default walk
+#      scanned 83 of them. ci.yml now passes --log-opts with
+#      --diff-merges=remerge, which raises that to 86 for 804 extra bytes and
+#      about two seconds. `remerge` rather than `-m` or `--diff-merges=
+#      first-parent` on purpose: those two also work, but they re-scan the whole
+#      of every merged branch (+490 KB here) and report each finding twice.
+#      remerge shows only what the merge itself introduced, which is exactly the
+#      gap.
+#
+#   3. The test-fixture allowlist no longer covers a whole directory tree. See
+#      the note on it below.
+#
+# A trap found while doing this, recorded so nobody loses an afternoon to it:
+# gitleaks 8.28.0 DOES NOT SUPPORT `targetRules` in a top-level [[allowlists]]
+# block. It is not rejected and it does not warn - the allowlist simply stops
+# suppressing anything, whether the rule named is the right one or the wrong
+# one. Measured: an allowlist that suppressed a finding by path suppressed
+# nothing at all once `targetRules` was added. So per-rule scoping is not
+# available here; that is why the exceptions below are split between path
+# allowlists and .github/.gitleaksignore rather than expressed in one place.
 # ---------------------------------------------------------------------------
 
 [extend]
 useDefault = true
 
+# ---------------------------------------------------------------------------
+# The dead password-reset AES key, as an explicit rule.
+#
+# Not a secret, and deliberately written out in full: this literal is dead, it
+# is already in this repository's history in three commits, and it decrypts
+# nothing that is still deployed. Writing it here is what makes it detectable.
+# The entropy analysis above is the entire reason the rule has to exist - no
+# generic rule will ever see this string, so if it is pasted back in, only a
+# rule that names it will notice.
+#
+# This is a REGRESSION GUARD, not secret detection. It answers one question:
+# has the old key come back? That is a real question, because the obvious way
+# to "fix" a password-reset link that stopped working is to restore the key the
+# outstanding links were minted with.
+#
+# No `entropy` setting, on purpose. An entropy floor here would reproduce the
+# exact defect the rule exists to correct.
+#
+# The two places the literal already is are ignored by fingerprint in
+# .github/.gitleaksignore, not by path, so that this rule stays live in both of
+# those files for anything NEW.
+# ---------------------------------------------------------------------------
+[[rules]]
+id = "worksite-dead-password-reset-aes-key"
+description = "The retired hard-coded password-reset AES key has been reintroduced"
+regex = '''5A7134743777217A'''
+keywords = ["5a7134743777217a"]
+
 [[allowlists]]
 description = """
-Test fixtures. engine/src/test is where the engine's own tests supply the
-signing key, AES key and SMTP password that src/main deliberately refuses to
-default - ProductionConfigurationTest and SecurityMatrixTest exist precisely to
-assert that those have no fallback in production, and they cannot do that
-without holding a fake one. web's axios test does the same with a
-JWT-shaped string ('eyJhbGciOiJIUzI1NiJ9.header.signature') to assert the
-Authorization header is attached. Fake credentials in test sources are the
-correct state of affairs, not a leak.
+Test fixtures that hold a deliberately fake credential. engine/src/test is
+where the engine's own tests supply the signing key, AES key and SMTP password
+that src/main deliberately refuses to default - ProductionConfigurationTest and
+SecurityMatrixTest exist precisely to assert that those have no fallback in
+production, and they cannot do that without holding a fake one. web's axios
+test does the same with a JWT-shaped string
+('eyJhbGciOiJIUzI1NiJ9.header.signature') to assert the Authorization header is
+attached. Fake credentials in test sources are the correct state of affairs,
+not a leak.
 
-THE COST, stated plainly: a REAL secret pasted into a test file would also not
-be reported. That is a genuine hole and it is accepted knowingly - the
-alternative is eight permanent false positives, which buys nothing and costs the
-job its credibility. Narrow it to specific fingerprints if test sources ever
-start holding anything that matters.
+FOUR FILES, NOT A DIRECTORY TREE, and the narrowing is the point. This list
+used to read `engine/src/test/.*`, which suppressed findings from every rule in
+every file under it. That is not hypothetical harm: it is what already
+happened. Commit a88e320 put the REAL password-reset AES key into
+PasswordServiceTest.java's javadoc, at a path that pattern covered, and this
+job would have said nothing about it. Measured: with the tree-wide pattern in
+place, an explicit rule for that literal reports 1 finding; with
+engine/src/test removed from the list, 2.
+
+These four files are the complete set that produces a finding today - checked
+by scanning the whole history with the default ruleset and no allowlists at
+all, which reports nine, in these four files and in PasswordServiceTest.java.
+Everything else under engine/src/test, all of detector/tests and the rest of
+web/src is now scanned normally. PasswordServiceTest.java is deliberately NOT
+in this list: it is the likeliest place for the old key to be pasted back, so
+its two known findings are ignored by fingerprint instead and every other rule
+stays live in it.
+
+THE RESIDUAL COST, stated plainly: a real secret pasted into one of these four
+files is still not reported. That is a much smaller hole than a whole tree, and
+it cannot be closed further without taking the nine false positives back.
 """
 paths = [
-  '''engine/src/test/.*''',
-  '''web/src/.*\.(test|spec)\.(js|jsx)$''',
-  '''web/src/setupTests\.js$''',
-  '''detector/tests/.*''',
+  '''engine/src/test/java/.*/securityConfig/JwtServiceTest\.java$''',
+  '''engine/src/test/java/.*/email/service/MailServiceTest\.java$''',
+  '''engine/src/test/resources/application\.yml$''',
+  '''web/src/util/axios\.test\.js$''',
 ]
 
 [[allowlists]]

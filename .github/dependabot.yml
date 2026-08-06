@@ -28,14 +28,28 @@ updates:
         patterns: ["*"]
         update-types: [minor, patch]
     ignore:
-      # Spring Boot 3.0.4 -> 3.5.x is a migration, not a bump: it moves
-      # spring-kafka from a ZooKeeper broker to KRaft, changes Spring Security
-      # 6.0 request-matcher APIs that SecurityConfiguration uses directly, and
-      # is exactly the upgrade the Testcontainers-based integration tier was
-      # written to be a trustworthy oracle for. A Dependabot PR cannot do it and
-      # would sit open failing CI forever. Do it deliberately, in its own branch.
+      # THE 3.0.4 -> 3.5.x MIGRATION HAS LANDED. It went in with PR #13 and the
+      # POM is on 3.5.16; the description that used to be here spoke of it as
+      # pending, which stopped being true and then went on blocking things.
+      #
+      # What it blocked: `version-update:semver-minor` was in this list because
+      # the migration was a migration - spring-kafka moving from a ZooKeeper
+      # broker to KRaft, Spring Security 6.0 request-matcher APIs that
+      # SecurityConfiguration uses directly - and a Dependabot PR could not have
+      # done it. That reasoning expired on the day the upgrade merged, but the
+      # rule did not, so 3.5.x -> 3.6.x was still being suppressed as though
+      # nobody had done the work. Minor bumps within Boot 3 are now ordinary
+      # bumps and are allowed through.
+      #
+      # WHAT REMAINS IS THE GUARD AGAINST BOOT 4, and it is still wanted, for
+      # the same reason the 3.x one was: a major is a migration someone has to
+      # drive. The Testcontainers integration tier is the oracle that makes it
+      # safe to attempt, and it does not run on pull requests (see the note on
+      # detector-integration in ci.yml for the same trade), so a major-version
+      # PR would sit open, green on the checks that ran and untested on the ones
+      # that matter. Do it deliberately, in its own branch.
       - dependency-name: org.springframework.boot:spring-boot-starter-parent
-        update-types: [version-update:semver-major, version-update:semver-minor]
+        update-types: [version-update:semver-major]
     commit-message:
       prefix: "build(engine)"
     labels: ["dependencies", "engine"]
