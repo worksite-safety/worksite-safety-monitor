@@ -40,7 +40,7 @@ class EventRepositoryIT extends AbstractIntegrationTest {
    *
    * <p>The Java field is a {@link BigDecimal}. Spring Data MongoDB has historically mapped
    * BigDecimal to a BSON <em>String</em> and only later moved towards Decimal128
-   * ({@code MongoCustomConversions.BigDecimalRepresentation}, Spring Data MongoDB 4.2+). Which
+   * ({@code MongoCustomConversions.BigDecimalRepresentation}, Spring Data MongoDB 4.5+). Which
    * of the two applies here is not academic: a later migration multiplies every stored duration
    * by 1000, and the query is a different query depending on the answer.
    *
@@ -51,10 +51,17 @@ class EventRepositoryIT extends AbstractIntegrationTest {
    *       {@code [{$set: {timePeriod: {$toString: {$multiply: [{$toDecimal: "$timePeriod"}, 1000]}}}}]}.</li>
    * </ul>
    *
-   * <p>It is also the most dangerous silent change in the upcoming upgrade: if new writes become
+   * <p>It is also the most dangerous silent change a Boot upgrade can bring: if new writes become
    * Decimal128 while old documents stay String, every range query and every arithmetic
    * aggregation over the field starts disagreeing with itself. String comparison also means
    * {@code "10" < "9"}, so a mixed collection is not merely inconsistent, it is wrong.
+   *
+   * <p>That has not happened yet. On Boot 3.5.16 / Spring Data MongoDB 4.5.13 the representation
+   * still defaults to {@code STRING}, so this test measures the same thing it always did. It is
+   * Spring Data MongoDB 5.0 (Boot 4.0) that flips the default away from String, and at that point
+   * a {@code MongoCustomConversions} pinning {@code BigDecimalRepresentation.STRING} is what keeps
+   * the collection from holding both types - so treat a failure here as that upgrade arriving,
+   * not as a bad assertion.
    */
   @Test
   @DisplayName("timePeriod (BigDecimal) is persisted as a BSON String, not Decimal128")
