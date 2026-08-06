@@ -15,7 +15,12 @@
     <description>engine</description>
     <properties>
         <java.version>17</java.version>
-        <jjwt.version>0.11.5</jjwt.version>
+        <!--
+          0.13.0. The 0.12 line removed Jwts.parserBuilder() outright - Jwts.parser() now returns
+          the JwtParserBuilder that parserBuilder() used to - so this is a source-incompatible
+          bump, not a drop-in one. See JwtService for the calls that moved.
+        -->
+        <jjwt.version>0.13.0</jjwt.version>
         <!--
           springdoc is NOT in spring-boot-dependencies, so this pin is real work rather than a
           restatement of the parent: it has to be moved by hand whenever the parent moves.
@@ -24,7 +29,7 @@
         -->
         <swagger.openapi.version>2.9.0</swagger.openapi.version>
         <itext.pdf.version>5.5.13.3</itext.pdf.version>
-        <jacoco.maven.plugin.version>0.8.10</jacoco.maven.plugin.version>
+        <jacoco.maven.plugin.version>0.8.15</jacoco.maven.plugin.version>
         <testcontainers.version>1.21.3</testcontainers.version>
         <!--
           Placeholder for JaCoCo's late-replaced @{argLine}. Surefire is configured with

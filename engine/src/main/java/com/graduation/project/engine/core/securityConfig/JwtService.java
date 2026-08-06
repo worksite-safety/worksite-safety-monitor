@@ -2,14 +2,13 @@ package com.graduation.project.engine.core.securityConfig;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,12 +41,28 @@ import java.util.function.Function;
  * unchecked {@link io.jsonwebtoken.JwtException}, and an empty or null token as a plain
  * {@link IllegalArgumentException}. None of them are checked, so nothing forces a caller to handle
  * them; {@link JwtAuthenticationFilter} does, because it runs outside {@code DispatcherServlet}
- * where an escaping exception is an uncatchable 500 rather than a 403.
+ * where an escaping exception is an uncatchable 500 rather than a 403. That split survived the
+ * jjwt 0.11 -> 0.13 upgrade unchanged, and {@code JwtServiceTest} re-measures each case.
+ *
+ * <h2>jjwt 0.13 API</h2>
+ *
+ * <p>The 0.12 line reshaped both halves of this class. {@code Jwts.parserBuilder()} was removed and
+ * {@code Jwts.parser()} took over its return type; {@code setSigningKey} became
+ * {@code verifyWith(SecretKey)}, {@code parseClaimsJws} became {@code parseSignedClaims}, and
+ * {@code Jws.getBody()} became {@code getPayload()}. On the builder the {@code setXxx} claim
+ * mutators lost their prefix and {@code signWith(key, SignatureAlgorithm.HS256)} became
+ * {@code signWith(key, Jwts.SIG.HS256)}. The deprecated spellings still exist in 0.13.0 - except
+ * {@code parserBuilder()}, which does not - but they are scheduled for removal before 1.0, so this
+ * class uses the current ones throughout rather than leaving a second upgrade to be done later.
+ *
+ * <p>The key field is a {@link SecretKey} rather than a {@link java.security.Key} because that is
+ * what {@code verifyWith} accepts: the parser has separate overloads for symmetric and asymmetric
+ * verification now, and a bare {@code Key} matches neither.
  */
 @Service
 public class JwtService {
 
-  private final Key signInKey;
+  private final SecretKey signInKey;
   private final long expirationMillis;
 
   public JwtService(
@@ -83,13 +98,17 @@ public class JwtService {
     // exp let the millisecond tick between them, and since JWT timestamps are whole seconds that
     // made the token's lifetime 1201 seconds instead of 1200 about once in a thousand tokens.
     long now = System.currentTimeMillis();
+    // claims(map) ADDS where the old setClaims(map) REPLACED. Identical here only because this is
+    // the first call on a fresh builder, so there is nothing yet to replace, and everything below
+    // is applied afterwards and therefore still wins over a same-named entry in extraClaims.
+    // Moving this call down the chain would change behaviour under the new API but not the old.
     return Jwts.builder()
-        .setClaims(extraClaims)
+        .claims(extraClaims)
         .claim("authorities", userDetails.getAuthorities())
-        .setSubject(userDetails.getUsername())
-        .setIssuedAt(new Date(now))
-        .setExpiration(new Date(now + expirationMillis))
-        .signWith(signInKey, SignatureAlgorithm.HS256)
+        .subject(userDetails.getUsername())
+        .issuedAt(new Date(now))
+        .expiration(new Date(now + expirationMillis))
+        .signWith(signInKey, Jwts.SIG.HS256)
         .compact();
   }
 
@@ -107,8 +126,8 @@ public class JwtService {
   }
 
   private Claims extractAllClaims(String token) {
-    return Jwts.parserBuilder()
-        .setSigningKey(signInKey)
-        .build().parseClaimsJws(token).getBody();
+    return Jwts.parser()
+        .verifyWith(signInKey)
+        .build().parseSignedClaims(token).getPayload();
   }
 }

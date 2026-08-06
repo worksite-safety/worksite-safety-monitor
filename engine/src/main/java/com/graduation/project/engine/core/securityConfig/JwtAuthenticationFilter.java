@@ -84,6 +84,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       // "Authorization: Bearer " (nothing after the space) produces. Catching only JwtException
       // leaves that one case still returning 500.
       //
+      // Re-measured against jjwt 0.13.0 during the 0.11.5 -> 0.13.0 upgrade, since 0.12 reshaped
+      // the parser API and could have moved these. It did not. Parsing with the current
+      // Jwts.parser().verifyWith(...).parseSignedClaims(...) chain throws, in order:
+      // ExpiredJwtException (expiry), io.jsonwebtoken.security.SignatureException (foreign
+      // signature, and also a token whose payload is not valid Base64), MalformedJwtException
+      // ("not-a-jwt", "a.b.c", "...."), and a bare java.lang.IllegalArgumentException for null,
+      // "" and " ". The first four extend JwtException; the last does not. Both arms of this
+      // catch are still load-bearing, and SecurityMatrixTest pins every one of those inputs at
+      // 403 through the live filter chain.
+      //
       // DEBUG, not WARN: an expired token is the single most common thing that reaches this line,
       // it is entirely routine, and logging it at WARN would let any anonymous caller flood the
       // logs by sending garbage. The message carries no token material.
