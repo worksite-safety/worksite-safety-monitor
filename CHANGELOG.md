@@ -6,9 +6,14 @@ versions follow [Semantic Versioning](https://semver.org).
 Every number below is reproducible from this repository: the per-frame measurements come from
 `detector/tests/data/baseline/`, and every fix named is pinned by a test.
 
-## [1.0.0] — 2026-08-05
+## [Unreleased]
 
-First open-source release.
+Everything below is the first open-source release, and it is **not tagged yet**. `main` carries all
+of it; no `v1.0.0` exists. The only tag in this repository is
+[`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1),
+a pre-release that carries the two model weight files as assets — it versions those files, not this
+code. When the release is cut, this heading takes its number and its date and nothing beneath it
+changes.
 
 The starting point was a university graduation project: a working demo of three modules that talked
 to each other, and a 546-line `aiModule.py` that could not be imported without a live Kafka broker,
@@ -21,9 +26,12 @@ or later.
 
 - **`worksite_detector`**, the detector rewritten as a package with a hard boundary: only
   `adapters.py`, `annotate.py` and `KafkaEventPublisher.connect` may import `cv2`, `ultralytics`,
-  `kafka`, `torch` or `numpy`, enforced by an AST test. The consequence is a unit suite of 418 tests
-  that runs in about 1.6 seconds with no CV stack installed at all; the tier that does need one is
-  63 further tests behind a `requires_ultralytics` marker.
+  `kafka`, `torch` or `numpy`, enforced by an AST test. The consequence is a unit suite that does not
+  need a CV stack to run: 418 passed and 63 deselected in 1.64 s on a machine that has one, and 414
+  in CI on a machine that has none — the four-test gap is two `numpy` `importorskip`s plus two
+  harness guards that assert the blocked libraries *are* installed, which is what stops the
+  import-blocking proofs passing vacuously. The 63 deselected are the tier that genuinely needs
+  ultralytics, behind a `requires_ultralytics` marker.
 - **A real entry point.** `python -m worksite_detector`, or the `worksite-detector` console script.
   The original defined `parse_args()` and never called it, so nothing was configurable without
   editing Python — and its `--sport` default named a gesture that did not exist in its own table.
@@ -173,12 +181,30 @@ or later.
 
 ### Security
 
-- **A Gmail app password, the JWT signing key and the password-reset AES key were committed.** They
-  are out of the working tree and out of the history, and all three are now environment variables
-  with no committed fallback, so a deployment that forgets one refuses to start. **A history rewrite
-  does not un-leak anything already cloned: all three must still be rotated or revoked.** The reset
-  key is the urgent one — it encrypts the token that authorises a password change, and that token has
-  no expiry. See [SECURITY.md](SECURITY.md).
+- **Two credentials were committed, not three, and one of them is still in the history.** All three
+  secrets are environment variables with no committed fallback now, so a deployment that forgets one
+  refuses to start; but "externalised" and "not leaked" are different claims and an earlier draft of
+  this entry ran them together. Separately, then:
+
+  **A Gmail app password** sat in `spring.mail.password`. It is out of the working tree and out of
+  the history, and it **must still be revoked at Google** — deleting a credential from a file has
+  never un-issued it.
+
+  **The password-reset AES key** was a 16-character literal in `PasswordService.java`, and it is
+  **still in this repository's history**. Three blobs hold it: the file as introduced in `fdbaece`
+  and as reformatted in `87e2869`, plus `PasswordServiceTest.java`, which quoted it in `a88e320`.
+  `4363391` removed it from both. All four commits are reachable from `main`. History was
+  deliberately *not* rewritten to purge it, because a rewrite changes every commit id beneath it and
+  still cannot reach a clone that already exists — it buys the appearance of cleanliness and none of
+  the substance. What closes the exposure is that the key is dead: it has been rotated, no deployment
+  ever ran on it, and the value in use today appears in zero commits.
+
+  **The JWT signing key was never committed at all.** All five historical `JwtService.java` blobs
+  read `private static final String SECRET_KEY = "${JWT_SECRET}"` — an unresolved Spring placeholder,
+  never a value — and no run of 64 hexadecimal characters exists in any of the 663 blobs in the
+  object database. It was rotated anyway. This entry used to say it leaked; it did not.
+
+  See [SECURITY.md](SECURITY.md), which carries the same facts with the reasoning behind each.
 - **`MailController` accepted an unauthenticated `POST` with the recipient in the path** — an open
   relay. The class is deleted, its `permitAll` entry with it, and a test asserts it is gone from the
   classpath, because securing a URL and deleting its handler look identical from outside.
@@ -227,8 +253,14 @@ or later.
 
 Stated here because they are measured, not assumed. The full list is in the README.
 
-- **`event.periodic.input-unit` still ships as `SECONDS`.** It describes the producer that was in the
-  field before this release. Deploying the rewritten detector means flipping it to `MILLIS`; a
+- **`event.periodic.input-unit` ships as `MILLIS`**, matching the rewritten detector — in
+  `engine/src/main/resources/application.yml` and in `docker-compose.yml` alike. An earlier draft of
+  this entry said `SECONDS`, which described the producer that was in the field *before* this work
+  and was already stale when it was written. The one place `SECONDS` survives is the annotation
+  default in `RawEventService`, `${event.periodic.input-unit:SECONDS}`, which applies only if the
+  property is absent from configuration entirely; it is the pre-migration reading, kept so that an
+  old deployment picking up this code does not silently reinterpret its existing producer. If you
+  have data written before this work, run the migration first and then confirm the flag — a
   millisecond producer read as seconds stores 33 ms flickers as violations, and a seconds producer
   read as milliseconds stores nothing. Both are silent.
 - **Neither gesture has ever been demonstrated on real video.** The baseline clip contains no
