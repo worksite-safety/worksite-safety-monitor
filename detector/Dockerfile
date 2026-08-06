@@ -66,14 +66,40 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # as somebody else's transitive dependency, at whatever version that somebody
 # happened to need. That is what is being removed here, more than any one CVE.
 #
-# Pinned exactly rather than `>=`: a floor would today resolve to pip 26.x and
-# setuptools 83.x, which is a resolver change nobody asked for, and would make two
-# builds of the same commit contain different software. Note also that setuptools
-# vendors its own copy of wheel under setuptools/_vendor/ - this line does not touch
-# that copy, only a newer setuptools moves it, so a scanner reporting a wheel version
-# other than the one below has found the vendored one.
+# Pinned exactly rather than `>=`: a floor resolves to whatever is newest on the day
+# of the build, which would make two builds of the same commit contain different
+# software. Every bump here is therefore a deliberate edit to this line.
+#
+# setuptools is 83.0.0 because of what it VENDORS, not because of setuptools itself.
+# A scan of the image reports the contents of setuptools/_vendor/ as packages in their
+# own right, and those were the only two fixable HIGH findings in the whole image -
+# every other CRITICAL/HIGH is a Debian package with no fixed version upstream. The
+# wheel pin on this line does not reach them; it installs the TOP-LEVEL wheel, and
+# `pip show wheel` reporting 0.46.2 while a scanner still says 0.45.1 is the two
+# copies talking past each other. Only moving setuptools moves the vendored copy.
+#
+# Measured against the artifacts on PyPI, not against a changelog:
+#
+#     78.1.1 - 80.9.0    wheel 0.45.1   jaraco.context 5.3.0   both flagged
+#     80.10.1            wheel 0.45.1   jaraco.context 6.1.0   half of it
+#     80.10.2 and later  wheel 0.46.3   jaraco.context 6.1.0   both clear
+#
+# so 80.10.2 is the lowest version that clears both. 83.0.0 is what is pinned because
+# it clears a third finding the others do not - CVE-2026-59890 is against setuptools
+# itself and names 83.0.0 as its fix - and because 80.10.2 through 82.x buy nothing
+# that 83.0.0 does not. Note that the vendored jaraco.context directory is spelled
+# `jaraco_context-6.1.0.dist-info` from 80.10.1 on, with an underscore; grepping the
+# old dotted name finds nothing and looks like a removal rather than an upgrade.
+#
+# THE behaviour change to know about, and the reason this is a Dockerfile edit rather
+# than a version bump: setuptools 82.0.0 DELETED pkg_resources. 81.0.0 still ships it,
+# 82.0.0 and later do not, so any `import pkg_resources` in this image is now an
+# ImportError rather than a deprecation warning. Nothing here does one - checked
+# across ultralytics, torch, torchvision, cv2 and kafka-python-ng, and the suite runs
+# inside the built image to prove it - but a future dependency that does will fail on
+# import, and 81.0.0 is the last version that would forgive it.
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade 'pip==25.3' 'setuptools==78.1.1' 'wheel==0.46.2'
+    pip install --upgrade 'pip==25.3' 'setuptools==83.0.0' 'wheel==0.46.2'
 
 # THE size decision. `pip install ultralytics` on linux/amd64 resolves torch
 # from PyPI, and that wheel bundles the CUDA runtime, cuDNN and cuBLAS: roughly
