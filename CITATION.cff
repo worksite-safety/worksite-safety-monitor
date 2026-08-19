@@ -1,0 +1,45 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it using the metadata below. Cite the
+  concept DOI when you mean the project; cite the version DOI of the release you
+  actually ran when the exact code matters.
+title: Worksite Safety Monitor
+abstract: >-
+  Watches a worksite camera for missing hard hats and hi-vis jackets, for falls,
+  and for two arm/torso gestures, and turns what it sees into dated safety
+  statistics an operator can chart, export as a PDF and be emailed about. Three
+  independently runnable modules -- a Python/YOLOv8 detector, a Spring Boot
+  engine and a React dashboard -- joined by one Kafka topic and one REST API.
+type: software
+authors:
+  - family-names: Güveli
+    given-names: Aziz Can
+  - family-names: Yılmaz
+    given-names: Emre
+  - family-names: Emekci
+    given-names: Nil
+repository-code: 'https://github.com/worksite-safety/worksite-safety-monitor'
+url: 'https://github.com/worksite-safety/worksite-safety-monitor'
+license: AGPL-3.0-or-later
+version: 1.0.1
+date-released: '2026-08-19'
+doi: 10.5281/zenodo.22009804
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.22009804
+    description: >-
+      The concept DOI. Always resolves to the newest archived version; cite this
+      when you mean the project rather than one particular release.
+  - type: doi
+    value: 10.5281/zenodo.22009805
+    description: The version DOI of v1.0.1.
+keywords:
+  - computer-vision
+  - object-detection
+  - pose-estimation
+  - ppe-detection
+  - occupational-safety
+  - yolov8
+  - kafka
+  - spring-boot
+  - react

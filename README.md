@@ -5,6 +5,7 @@ arm/torso gestures, and turns what it sees into dated safety statistics an opera
 export as a PDF and be emailed about.
 
 Licensed under [AGPL-3.0-or-later](LICENSE). Derived work is recorded in [NOTICE](NOTICE).
+Archived and citable: [10.5281/zenodo.22009804](https://doi.org/10.5281/zenodo.22009804).
 
 ---
 
@@ -323,8 +324,31 @@ Read [SECURITY.md](SECURITY.md) before deploying this anywhere, and to report a 
 | [CONTRIBUTING.md](CONTRIBUTING.md) | how to propose a change |
 | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | the behaviour expected of participants, and who to tell |
 | [CHANGELOG.md](CHANGELOG.md) | what changed, release by release |
+| [CITATION.cff](CITATION.cff) | how to cite this software, and which DOI means what |
 | [SECURITY.md](SECURITY.md) | reporting a vulnerability, and the credentials in the history |
 | [detector/tests/data/baseline/](detector/tests/data/baseline/) | the recorded trace, its provenance, and the measured differential against the original implementation |
+
+---
+
+## Citation
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22009804.svg)](https://doi.org/10.5281/zenodo.22009804)
+
+Zenodo archives each GitHub release and mints a DOI for it. The badge above is the **concept DOI**,
+`10.5281/zenodo.22009804`: it always resolves to the newest archived version, and it is the one to
+cite when you mean the project.
+
+To cite the exact code you ran, use that release's own **version DOI** instead — `v1.0.1` is
+[10.5281/zenodo.22009805](https://doi.org/10.5281/zenodo.22009805). The two are easy to confuse,
+because the DOI Zenodo shows you next to the repository on its GitHub settings page is the version
+one, not the concept one.
+
+`v1.0.0` predates the Zenodo hook and has no DOI of its own. `v1.0.1` tags the same commit —
+`git diff v1.0.0 v1.0.1` is empty — so the DOIs above archive the v1.0.0 tree under a later tag.
+
+[CITATION.cff](CITATION.cff) carries the same metadata in machine-readable form. GitHub renders
+BibTeX and APA from it under "Cite this repository", and Zenodo reads it when depositing future
+releases.
 
 ---
 

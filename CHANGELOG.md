@@ -6,14 +6,70 @@ versions follow [Semantic Versioning](https://semver.org).
 Every number below is reproducible from this repository: the per-frame measurements come from
 `detector/tests/data/baseline/`, and every fix named is pinned by a test.
 
-## [Unreleased]
+## [1.0.2] — 2026-08-19
 
-Everything below is the first open-source release, and it is **not tagged yet**. `main` carries all
-of it; no `v1.0.0` exists. The only tag in this repository is
+Documentation only. No source file and no test changed. This release exists because three documents
+were describing a state the repository had left: this file still called the first release untagged,
+`CLAUDE.md` still called the repository private, and nothing anywhere named the DOI the archive had
+just been given.
+
+### Added
+
+- **[CITATION.cff](CITATION.cff)**, valid against CFF schema 1.2.0, and a citation section in
+  [README.md](README.md) carrying the DOI badge. The file drives GitHub's "Cite this repository"
+  button and is what Zenodo reads when depositing a release — but only while no `.zenodo.json`
+  exists, which would override it entirely. This is the first release deposited with it; every
+  earlier deposit took its metadata from GitHub's own author derivation.
+- **A "Releases and the DOI" section in `CLAUDE.md`**, saying which of the two DOIs means what, so
+  the next person does not paste the wrong one into a badge.
+
+### Fixed
+
+- **This file described the first release as untagged**, thirteen days after it shipped. The
+  `[Unreleased]` heading became `[1.0.0] — 2026-08-06` and nothing beneath it changed, exactly as
+  the paragraph under that heading had promised.
+- **`CLAUDE.md` said the repository was still private**, and said that `v1.0.0` "can take that
+  place" of GitHub's "Latest" when it is cut — by the time anyone read it, `v1.0.1` held it.
+- **The Zenodo record for `v1.0.1` credited its authors wrongly.** Zenodo had put each
+  contributor's whole display name into the family-name field, and had rendered one of the three as
+  `NilEmekci`, so a citation would have filed them under a name none of them has. Corrected by hand
+  on the record on 19 Aug 2026, along with the auto-generated title; the DOI did not change. The
+  fix is on Zenodo rather than here because `CITATION.cff` governs future deposits only.
+
+---
+
+## [1.0.1] — 2026-08-19
+
+**No code changed.** `v1.0.1` tags the same commit as `v1.0.0` — `974b52f` — and
+`git diff v1.0.0 v1.0.1` prints nothing. The tag exists because Zenodo only archives releases
+published after its GitHub integration is switched on, and `v1.0.0` was published thirteen days
+before it was. A second tag over an unchanged tree was cheaper than rewriting the first release.
+
+It is a patch number that buys an archive rather than fixes a defect, which is a deviation from the
+Semantic Versioning promise three lines above. It is recorded here rather than skipped quietly
+because anyone who diffs the two tags will find them identical and wonder what was hidden.
+
+### Added
+
+- **A DOI.** [10.5281/zenodo.22009804](https://doi.org/10.5281/zenodo.22009804) is the concept DOI
+  and always resolves to the newest archived version;
+  [10.5281/zenodo.22009805](https://doi.org/10.5281/zenodo.22009805) is this release alone. The DOI
+  Zenodo displays beside the repository on its own GitHub settings page is the version one, so
+  copying what it offers into a README freezes the badge at whatever release was current that day.
+
+---
+
+## [1.0.0] — 2026-08-06
+
+Everything below is the first open-source release. It was tagged
+[`v1.0.0`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/v1.0.0) on
+6 August 2026, at the commit `main` carried when this section was written; the heading took its
+number and its date and nothing beneath it changed, exactly as the pre-release version of this
+paragraph said it would. The other tag in this repository is
 [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1),
 a pre-release that carries the two model weight files as assets — it versions those files, not this
-code. When the release is cut, this heading takes its number and its date and nothing beneath it
-changes.
+code, which is why it is not `v1.0.0` and why retraining can yield `weights-v2` without implying a
+release of the code.
 
 The starting point was a university graduation project: a working demo of three modules that talked
 to each other, and a 546-line `aiModule.py` that could not be imported without a live Kafka broker,

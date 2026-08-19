@@ -14,8 +14,10 @@ detector (Python/YOLOv8)  --Kafka "rawEvents"-->  engine (Spring Boot)  --REST/J
 
 It began as a three-person graduation project (Oct 2023 – Jan 2024) and was rewritten for open
 source in Aug 2026. The rewrite is done, and all three co-authors have since given written consent
-to AGPL-3.0-or-later — `NOTICE` records that and when. **The repository is still private**, and what
-holds it there is now the credential work under "Outstanding" below, not the licensing.
+to AGPL-3.0-or-later — `NOTICE` records that and when. **The repository is public, `v1.0.0`
+shipped on 6 Aug 2026, and two patch tags have followed it, neither of them a code change.**
+Everything that once held it back is closed; the section at the bottom keeps the record of what
+those things were, and "Releases and the DOI" says what the tags mean.
 
 ## Commands
 
@@ -171,11 +173,12 @@ BSON storage type, the confidence provenance. Do not replace a measured number w
 - A `FALL` emails **every registered user**.
 - One camera, one role, no refresh tokens, no Kafka schema registry, no volume on Kafka.
 
-## What used to block release, and why none of it does now
+## What used to block release
 
-All three items are closed. They are kept rather than deleted because each one was the reason
-something else was deferred, and because two of them turned out to be smaller than this file
-claimed — which is worth remembering the next time it claims something.
+All three are closed and the release happened — `v1.0.0`, 6 Aug 2026. They are kept rather than
+deleted because each one was the reason something else was deferred, and because two of them
+turned out to be smaller than this file claimed — which is worth remembering the next time it
+claims something.
 
 1. **Rotate `JWT_SECRET` and `PASSWORD_RESET_AES_KEY` — done, and this entry says less than it
    used to on purpose.** It claimed both old values were in git history. Only one was. The AES
@@ -187,10 +190,12 @@ claimed — which is worth remembering the next time it claims something.
    `.env` appear in zero commits. Generate a pair with `scripts/init-env.sh`.
 2. **Revoke the Gmail app password — done, August 2026.** The account was
    `coderunners24@gmail.com`. Removing it from history never un-issued it, and the exposure was
-   narrow but not zero: this repository and its predecessor are both private with 0 forks, yet
-   every clone and CI cache taken while it was pushed still holds it. Those copies now authenticate
-   nothing. A Gmail app password grants IMAP as well as SMTP, so what this closed was read access to
-   that mailbox, not only the ability to send as it.
+   narrow but not zero: throughout the window the password was live, this repository and its
+   predecessor were both private with 0 forks, yet every clone and CI cache taken while it was
+   pushed still holds it. Those copies now authenticate nothing, which is why going public later
+   changed nothing here — revocation is what closed it, not visibility. A Gmail app password grants
+   IMAP as well as SMTP, so what this closed was read access to that mailbox, not only the ability
+   to send as it.
 3. **AGPL consent from Emre Yılmaz and Nil Emekci — obtained.** Both consented in writing in
    August 2026, and `NOTICE` states that and when. It is recorded here rather than deleted because
    it was the item everything else deferred to.
@@ -201,5 +206,29 @@ reproducible** — the training dataset is not in the repository. Do not delete 
 Both weights are now also published as assets of the [`weights-v1`](https://github.com/worksite-safety/worksite-safety-monitor/releases/tag/weights-v1)
 pre-release, with their SHA256 in the notes, so `best.pt` is no longer a single local copy. That
 release deliberately does **not** use the `v1.0.0` tag: it carries assets, not a version of this
-code, and `v1.0.0` stays unclaimed until the repository goes public. Being a pre-release, it is
-never GitHub's "Latest", so `v1.0.0` can take that place when it is cut.
+code. Being a pre-release it can never take GitHub's "Latest". The tag names a purpose rather
+than a version, so retraining yields `weights-v2` without implying a release of the code — and
+since the repository is public, the assets now download without `gh` auth.
+
+## Releases and the DOI
+
+Four tags: `weights-v1`, `v1.0.0`, `v1.0.1`, `v1.0.2`. GitHub's "Latest" follows the newest
+version tag and never `weights-v1`, which is a pre-release and cannot hold it. **Neither patch
+bump is a fix.** `v1.0.1` points at the same commit as `v1.0.0` — `974b52f`, empty diff — and
+exists only because Zenodo archives releases published *after* its GitHub hook is switched on,
+and `v1.0.0` was published thirteen days before it was. `v1.0.2` is documentation only.
+
+Two kinds of DOI, and the difference matters. `10.5281/zenodo.22009804` is the **concept** DOI:
+it always resolves to the newest archived version, and it is the one in the README badge and in
+`CITATION.cff`. Every release also gets a **version** DOI of its own — `10.5281/zenodo.22009805`
+is `v1.0.1` alone. Zenodo's GitHub settings page shows the *version* DOI beside the repository,
+so pasting what it offers into a badge freezes that badge at whatever release was current that
+day.
+
+`CITATION.cff` is what Zenodo reads when it deposits, and only while no `.zenodo.json` exists —
+that file overrides the `.cff` entirely. `v1.0.2` is the first deposit made with it. The `v1.0.1`
+record predates it and was built from GitHub's own author derivation, which put each
+contributor's whole display name into the family-name field and rendered Nil Emekci as
+`NilEmekci`; that record was corrected by hand on 19 Aug 2026, title included, and its DOI did
+not change. If a future deposit comes out wrong, the fix is the `.cff` plus a hand edit of that
+one record — never a new tag.
