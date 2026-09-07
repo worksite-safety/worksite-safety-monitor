@@ -54,7 +54,7 @@
           an exact match for ours. springdoc 3.x targets Boot 4 and must not be used here.
         -->
         <swagger.openapi.version>2.9.0</swagger.openapi.version>
-        <itext.pdf.version>5.5.13.3</itext.pdf.version>
+        <itext.pdf.version>5.5.13.6</itext.pdf.version>
         <jacoco.maven.plugin.version>0.8.15</jacoco.maven.plugin.version>
         <testcontainers.version>1.21.3</testcontainers.version>
         <!--
