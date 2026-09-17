@@ -16,7 +16,7 @@ dependencies = ["pyyaml>=6.0"]
 # This is what keeps the TDD inner loop alive; see tests/test_architecture.py,
 # which enforces the boundary.
 dev = ["pytest>=8", "pytest-cov", "ruff", "mypy"]
-cv = ["ultralytics>=8.3,<8.4", "opencv-python>=4.8", "kafka-python-ng>=2.2"]
+cv = ["ultralytics>=8.3,<8.5", "opencv-python>=4.8", "kafka-python-ng>=2.2"]
 
 [project.scripts]
 worksite-detector = "worksite_detector.__main__:main"
